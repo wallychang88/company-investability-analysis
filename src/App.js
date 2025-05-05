@@ -667,7 +667,7 @@ const VCAnalysisTool = () => {
                             score >= 7 ? 'bg-green-500' : 
                             score >= 4 ? 'bg-yellow-500' : 
                             'bg-red-500'
-                          }`} 
+                          }`}} 
                           style={{ height: `${Math.max(5, percentage * 2)}px` }}
                         ></div>
                         <div className="text-xs mt-1 font-medium">{score}</div>

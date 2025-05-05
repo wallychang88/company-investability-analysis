@@ -18,10 +18,10 @@ const VCAnalysisTool = () => {
     founding_year: ''
   });
   const [investingCriteria, setInvestingCriteria] = useState(`We invest in enterprise SaaS and managed services companies that:
-• have 80–300 employees
-• provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
-• are not overhyped application layer LLM SaaS products
-• and have a clear, defensible moat (e.g., proprietary data or network effects)`);
+- have 80–300 employees
+- provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
+- are not overhyped application layer LLM SaaS products
+- and have a clear, defensible moat (e.g., proprietary data or network effects)`);
 
   // Parse criteria text to extract criteria items
   const [criteriaItems, setCriteriaItems] = useState([
@@ -30,6 +30,10 @@ const VCAnalysisTool = () => {
     { id: 'not_overhyped', label: 'Not Overhyped LLM Products', weight: 1.0 },
     { id: 'defensible_moat', label: 'Defensible Moat', weight: 1.0 }
   ]);
+  const [processedData, setProcessedData] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [resultCount, setResultCount] = useState(0);
 
   // Effect to parse criteria text
   useEffect(() => {
@@ -85,7 +89,7 @@ const VCAnalysisTool = () => {
     };
     
     parseCriteriaText();
-  }, [investingCriteria]);
+  }, [investingCriteria, criteriaItems]);
   
   // Update weights function
   const updateCriteriaWeight = (id, weight) => {
@@ -95,10 +99,6 @@ const VCAnalysisTool = () => {
       )
     );
   };
-  const [processedData, setProcessedData] = useState([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [resultCount, setResultCount] = useState(0);
 
   const handleFileUpload = (event) => {
     const uploadedFile = event.target.files[0];
@@ -187,9 +187,6 @@ const VCAnalysisTool = () => {
     });
   };
 
-  // Remove the simulateAPIScoring function since we're using the real API now
-  // const simulateAPIScoring = (row) => { ... };
-
   const processData = async () => {
     if (!parsedData.length) {
       alert('Please upload a file before processing');
@@ -250,37 +247,6 @@ const VCAnalysisTool = () => {
       alert('An error occurred while processing the data. Please try again.');
       setIsProcessing(false);
     }
-  };
-  };
-
-    setIsProcessing(true);
-    setProgress(0);
-    setResultCount(0);
-    
-    const results = [];
-    const total = parsedData.length;
-    
-    for (let i = 0; i < parsedData.length; i++) {
-      const row = parsedData[i];
-      const score = await simulateAPIScoring(row);
-      
-      const processedRow = {
-        ...row,
-        investability_score: score
-      };
-      
-      results.push(processedRow);
-      setResultCount(i + 1);
-      setProgress(Math.round(((i + 1) / total) * 100));
-    }
-    
-    setProcessedData(results);
-    setIsProcessing(false);
-  } catch (error) {
-    console.error('Error processing data:', error);
-    alert('An error occurred while processing the data. Please try again.');
-    setIsProcessing(false);
-  }
   };
 
   const downloadResults = () => {

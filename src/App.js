@@ -235,50 +235,51 @@ export default function VCAnalysisTool() {
     }
     
     setProgress(100);
-    } catch (err) {
-      console.error(err);
-      window.alert("An error occurred while processing the data. Please try again.");
-    } finally {
-      setIsProcessing(false);
-    };
+  } catch (err) {
+    console.error(err);
+    window.alert("An error occurred while processing the data. Please try again.");
+  } finally {
+    setIsProcessing(false);
+  }
+}; // First missing closing brace here
 
-  const downloadResults = () => {
-    if (!processedData.length) return;
+const downloadResults = () => {
+  if (!processedData.length) return;
+  
+  // Create a new array with all the original columns and data,
+  // with the investability score added as a new column
+  const outputData = processedData.map(row => {
+    // Start with a copy of the original row
+    const outputRow = { ...row };
     
-    // Create a new array with all the original columns and data,
-    // with the investability score added as a new column
-    const outputData = processedData.map(row => {
-      // Start with a copy of the original row
-      const outputRow = { ...row };
-      
-      // Make sure the investability score is the last column
-      // by temporarily removing it
-      const score = outputRow.investability_score;
-      delete outputRow.investability_score;
-      
-      // Add it back as the final column
-      outputRow.investability_score = score;
-      
-      return outputRow;
-    });
+    // Make sure the investability score is the last column
+    // by temporarily removing it
+    const score = outputRow.investability_score;
+    delete outputRow.investability_score;
     
-    // Generate CSV with all columns preserved
-    const csv = Papa.unparse(outputData, {
-      columns: [...headers, 'investability_score'] // Ensure all original headers + score
-    });
+    // Add it back as the final column
+    outputRow.investability_score = score;
     
-    // Create and trigger download
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
+    return outputRow;
+  });
+  
+  // Generate CSV with all columns preserved
+  const csv = Papa.unparse(outputData, {
+    columns: [...headers, 'investability_score'] // Ensure all original headers + score
+  });
+  
+  // Create and trigger download
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "investability_analysis.csv";
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "investability_analysis.csv";
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
   /* ─────────────────────────── UI ─────────────────────────── */
   return (

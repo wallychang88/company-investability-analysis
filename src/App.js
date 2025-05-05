@@ -77,7 +77,7 @@ export default function VCAnalysisTool() {
       Papa.parse(uploaded, {
         delimiter: detectedDelimiter,
         header: false,
-        skipEmptyLines: false, // Keep empty lines to maintain row count
+        skipEmptyLines: true, // Keep empty lines to maintain row count
         complete: ({ data: full }) => {
           // The header is at row 3 (index 2 since arrays are 0‑indexed)
           const HEADER_ROW_INDEX = 2;

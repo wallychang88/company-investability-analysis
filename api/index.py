@@ -20,10 +20,10 @@ def analyze_companies():
         investing_text  = body["investing_criteria"]
         weightings      = body.get("criteria_weights", [])
 
-        # fix #1 – parse CSV
+        # parse CSV
         df = pd.read_csv(io.StringIO(csv_data))
 
-        # ⚠️  fix #2 – score the ENTIRE batch once
+        # score the ENTIRE batch once
         prompt = build_batch_prompt(df, column_map,
                                     investing_text, weightings)
 
@@ -41,7 +41,7 @@ def analyze_companies():
             ],
             response_format={"type": "json_object"},
             temperature=0.2,
-            max_tokens=4096,
+            max_tokens=10096,
         )
 
         rows = json.loads(chat.choices[0].message.content)["rows"]

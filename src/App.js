@@ -162,7 +162,10 @@ export default function VCAnalysisTool() {
   setResultCount(0);
 
   try {
-    const csvString = Papa.unparse(parsedData);
+    const csvString = Papa.unparse(parsedData, {
+      quotes: true, // Ensure strings with commas are quoted
+      header: true  // Include headers
+    });
     const API_URL = "/api/analyze"; // relative path for Vercel
 
     const response = await fetch(API_URL, {

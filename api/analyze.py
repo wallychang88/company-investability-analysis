@@ -51,7 +51,6 @@ def analyze_companies():
                 "error": f"Missing mapped columns: {', '.join(missing_columns)}"
             }), 400
         
-        df = pd.read_csv(io.StringIO(csv_data))
         total_rows = len(df)
 
         # Convert employee count to numeric if it exists

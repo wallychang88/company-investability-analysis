@@ -239,9 +239,6 @@ const VCAnalysisTool = () => {
         <div className="bg-white rounded-xl shadow-xl overflow-hidden mb-8">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-8 text-white text-center">
             <h1 className="text-3xl font-bold">VC Investability Analysis Tool</h1>
-            <p className="mt-2 text-blue-100 max-w-3xl mx-auto">
-              Upload company data, define your investment criteria, and leverage AI to identify the most promising opportunities.
-            </p>
           </div>
 
           {/* ░░░░░ Main content ░░░░░ */}
@@ -757,9 +754,6 @@ const VCAnalysisTool = () => {
             )}
 
             {/* Footer */}
-            <p className="text-center text-sm text-gray-500 mt-12">
-              © {new Date().getFullYear()} VC Investability Analysis Tool – Powered by GPT‑4o
-            </p>
           </div>
         </div>
       </div>

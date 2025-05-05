@@ -1,0 +1,41 @@
+/* App.css - Basic styles for Company Investability Analysis tool */
+
+/* Progress bar styling */
+progress {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+progress::-webkit-progress-bar {
+  background-color: #f3f4f6;
+  border-radius: 0.25rem;
+}
+
+progress::-webkit-progress-value {
+  background-color: #3b82f6;
+  border-radius: 0.25rem;
+}
+
+/* Custom file input styling */
+input[type="file"]::file-selector-button {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background-color: #e5e7eb;
+}
+
+/* Table styling */
+.table-row:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+.table-row:hover {
+  background-color: #f3f4f6;
+}

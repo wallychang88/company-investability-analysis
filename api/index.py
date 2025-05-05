@@ -22,10 +22,14 @@ def analyze_companies():
         weightings      = body.get("criteria_weights", [])
 
         # parse CSV
-        hdr_idx = detect_header_row(csv_data)           # auto‑detect
-        df = pd.read_csv(io.StringIO(csv_data),
-                 header=hdr_idx,                # use that line
-                 skip_blank_lines=True)
+        df = pd.read_csv(
+        io.StringIO(csv_data),
+        skiprows=4,        # ← rows 1‑4 ignored
+        header=0,          # ← row 5 becomes column names
+        skip_blank_lines=True,
+        sep=None,          # lets pandas autodetect comma vs. tab
+        engine="python"    # python engine handles tabs well
+     )
 
 
         # score the ENTIRE batch once
@@ -69,29 +73,6 @@ def build_batch_prompt(df, column_map, thesis, weightings):
         out.append(json.dumps(line))
     out.append("\nReturn JSON only.")
     return "\n".join(out)
-
-def detect_header_row(csv_text: str, max_scan: int = 10) -> int:
-    """
-    Return the line index (0 = first line) that most likely contains column
-    names, not data.  Strategy:
-      • Scan the first *max_scan* lines.
-      • Choose the first line where at least half of the cells contain
-        alphabetic characters and the cells are mostly unique.
-      • Fallback to 0 if nothing matches.
-    """
-    reader = csv.reader(io.StringIO(csv_text))
-    for idx, row in enumerate(reader):
-        if idx >= max_scan:
-            break
-        # ignore completely blank rows
-        non_blank = [c for c in row if c.strip()]
-        if len(non_blank) < 2:
-            continue
-        alpha_cells = sum(bool(re.search(r"[A-Za-z]", c)) for c in non_blank)
-        unique_cells = len(set(non_blank)) >= len(non_blank) * 0.9
-        if alpha_cells >= len(non_blank) / 2 and unique_cells:
-            return idx
-    return 0
 
 
 # health‑check

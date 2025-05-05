@@ -50,8 +50,6 @@ def analyze_companies():
                 "success": False, 
                 "error": f"Missing mapped columns: {', '.join(missing_columns)}"
             }), 400
-        
-        total_rows = len(df)
 
         # Convert employee count to numeric if it exists
         if 'employee_count' in column_map and column_map['employee_count'] in df.columns:
@@ -62,6 +60,9 @@ def analyze_companies():
             df[column_map['founding_year']] = pd.to_numeric(df[column_map['founding_year']], errors='coerce')
         
         def generate():
+
+            total_rows = len(df)
+            
             # Send initial progress update
             yield json.dumps({"type": "progress", "count": 0, "total": total_rows}) + "\n"
             

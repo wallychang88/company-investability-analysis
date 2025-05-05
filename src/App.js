@@ -1,92 +1,12 @@
 import React, { useState, useEffect } from "react";
 import Papa from "papaparse";
 
-/**
- * VC Investability Analysis Tool – single‑file React component
- * ------------------------------------------------------------
- * ‑ Uses TailwindCSS for styling
- * ‑ Assumes this file lives in `src/` of a CRA / Vite React app
- */
-const VCAnalysisTool = () => {
-  /* ─────────────────────────── State ─────────────────────────── */
-  const [file, setFile] = useState(null);
-  const [parsedData, setParsedData] = useState([]);
-  const [headers, setHeaders] = useState([]);
-  const [processedData, setProcessedData] = useState([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [resultCount, setResultCount] = useState(0);
+/* ─────────────────── File‑format constants ─────────────────── */
+const HEADER_ROW_INDEX = 2;   // row 3 becomes the header after PapaParse skips blanks
+const DELIMITER = "\t";      // SourceScrub TSV export
 
-  /** Column mappings between CSV headers ➜ internal field names */
-  const [columnMappings, setColumnMappings] = useState({
-    employee_count: "",
-    description: "",
-    industries: "",
-    specialties: "",
-    products_services: "",
-    end_markets: "",
-    country: "",
-    ownership: "",
-    founding_year: "",
-  });
-
-  /** Raw investing‑criteria text (edited by the user) */
-  const [investingCriteria, setInvestingCriteria] = useState(`We invest in enterprise SaaS and managed services companies that:
-• have 80–300 employees
-• provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
-• are not overhyped application‑layer LLM SaaS products
-• and have a clear, defensible moat (e.g., proprietary data or network effects)`);
-
-  /** Parsed criteria items with adjustable weights (0‑2) */
-  const [criteriaItems, setCriteriaItems] = useState([
-    { id: "employee_size", label: "Employee Size (80‑300)", weight: 1.0 },
-    { id: "ai_hpc_focus", label: "AI/HPC Infrastructure Focus", weight: 1.0 },
-    { id: "not_overhyped", label: "Not Overhyped LLM Products", weight: 1.0 },
-    { id: "defensible_moat", label: "Defensible Moat", weight: 1.0 },
-  ]);
-
-  /* ────────────────────── Helpers / effects ───────────────────── */
-  /**
-   * Extracts bullet‑point criteria from the free‑text box and updates
-   * the criteriaItems state, preserving existing weights when possible.
-   */
-  useEffect(() => {
-    const lines = investingCriteria.split("\n");
-    const bullets = lines
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("•"))
-      .map((l) => l.substring(1).trim());
-
-    if (bullets.length === 0) return; // nothing to parse
-
-    const newItems = bullets.map((text, idx) => {
-      const lower = text.toLowerCase();
-      let id = `criteria_${idx}`;
-
-      if (lower.includes("employee")) id = "employee_size";
-      else if (lower.includes("ai") || lower.includes("hpc")) id = "ai_hpc_focus";
-      else if (lower.includes("overhyped") || lower.includes("llm")) id = "not_overhyped";
-      else if (lower.includes("moat") || lower.includes("defensible")) id = "defensible_moat";
-
-      const existing = criteriaItems.find((c) => c.id === id);
-      return { id, label: text, weight: existing ? existing.weight : 1.0 };
-    });
-
-    setCriteriaItems(newItems);
-    // eslint‑disable‑next‑line react‑hooks/exhaustive‑deps
-  }, [investingCriteria]);
-
-  /** File‑upload → parse CSV */
-  const handleFileUpload = (e) => {
-    const uploaded = e.target.files[0];
-    if (!uploaded) return;
-
-    setFile(uploaded);
-
-    const HEADER_ROW_INDEX = 2; // row 3 after blanks are skipped
-const DELIMITER = "\t"; // SourceScrub exports are tab‑separated
-
-const VCAnalysisTool = () => {
+/* ───────────────────── Component ───────────────────────────── */
+export default function VCAnalysisTool() {
   /* ─────────────────────────── State ─────────────────────────── */
   const [file, setFile] = useState(null);
   const [parsedData, setParsedData] = useState([]);
@@ -108,15 +28,16 @@ const VCAnalysisTool = () => {
     founding_year: "",
   });
 
-  const [investingCriteria, setInvestingCriteria] = useState(`We invest in enterprise SaaS and managed services companies that:
+  const DEFAULT_THESIS = `We invest in enterprise SaaS and managed services companies that:
 • have 80–300 employees
 • provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
 • are not overhyped application‑layer LLM SaaS products
-• and have a clear, defensible moat (e.g., proprietary data or network effects)`);
+• and have a clear, defensible moat (e.g., proprietary data or network effects)`;
 
-  const [criteriaItems, setCriteriaItems] = useState([]);
+  const [investingCriteria, setInvestingCriteria] = useState(DEFAULT_THESIS);
+  const [criteriaItems, setCriteriaItems] = useState([]);   // derived below
 
-  /* ────────────────────── Helpers / effects ───────────────────── */
+  /* ───────── Parse bullet points → criteriaItems ───────── */
   useEffect(() => {
     const bullets = investingCriteria
       .split("\n")
@@ -124,71 +45,60 @@ const VCAnalysisTool = () => {
       .filter((l) => l.startsWith("•"))
       .map((l) => l.slice(1).trim());
 
-    const newItems = bullets.map((text, i) => ({
-      id: `criteria_${i}`,
-      label: text,
-      weight: 1.0,
-    }));
-    setCriteriaItems(newItems);
+    setCriteriaItems(
+      bullets.map((txt, i) => ({ id: `criteria_${i}`, label: txt, weight: 1.0 }))
+    );
   }, [investingCriteria]);
 
-  /* ───────────────────── File upload & parsing ────────────────── */
+  /* ─────────── File upload → parse TSV ─────────── */
   const handleFileUpload = (e) => {
     const uploaded = e.target.files[0];
     if (!uploaded) return;
     setFile(uploaded);
 
-    /** Pass 1 – read small preview to get header row **/
+    // Pass 1 – peek at first rows
     Papa.parse(uploaded, {
       delimiter: DELIMITER,
       header: false,
-      preview: HEADER_ROW_INDEX + 1, // read at least until header row
+      preview: HEADER_ROW_INDEX + 1,
       skipEmptyLines: true,
       complete: ({ data: preview }) => {
         const headersDetected = preview[HEADER_ROW_INDEX];
 
-        /** Pass 2 – full parse using detected header **/
+        // Pass 2 – full parse with detected header
         Papa.parse(uploaded, {
           delimiter: DELIMITER,
           header: false,
           skipEmptyLines: true,
           complete: ({ data: full }) => {
+            // Build array of objects keyed by header text
             const rows = full.slice(HEADER_ROW_INDEX + 1).map((row) => {
-              const obj = {};
-              headersDetected.forEach((h, i) => {
-                if (h) obj[h.trim()] = row[i];
-              });
-              return obj;
+              const o = {};
+              headersDetected.forEach((h, i) => h && (o[h.trim()] = row[i]));
+              return o;
             });
 
             setParsedData(rows);
             setHeaders(headersDetected.filter(Boolean).map((h) => h.trim()));
 
-            /* Auto‑map common columns */
-            const lower = headersDetected.map((h) => (h ? h.toLowerCase().trim() : ""));
-            const find = (needle) => {
+            /* Auto‑map a few obvious columns */
+            const lower = headersDetected.map((h) => h?.toLowerCase().trim() || "");
+            const findHdr = (needle) => {
               const idx = lower.indexOf(needle);
               return idx !== -1 ? headersDetected[idx].trim() : "";
             };
 
             const autoMap = {
-              employee_count: find("employee count"),
-              description: find("description"),
-              industries: find("industries"),
-              specialties: find("specialties"),
-              end_markets: find("end markets"),
-              country: find("country"),
-              ownership: find("ownership"),
-              founding_year: find("founding year") || find("founded"),
+              employee_count:    findHdr("employee count"),
+              description:       findHdr("description"),
+              industries:        findHdr("industries"),
+              specialties:       findHdr("specialties"),
+              products_services: findHdr("products and services") || findHdr("products & services"),
+              end_markets:       findHdr("end markets"),
+              country:           findHdr("country"),
+              ownership:         findHdr("ownership"),
+              founding_year:     findHdr("founding year") || findHdr("founded"),
             };
-
-            // Handle Products & Services label variants
-            const prodIdx =
-              lower.indexOf("products and services") !== -1
-                ? lower.indexOf("products and services")
-                : lower.indexOf("products & services");
-            if (prodIdx !== -1) autoMap.products_services = headersDetected[prodIdx].trim();
-
             setColumnMappings((cm) => ({ ...cm, ...autoMap }));
           },
         });
@@ -812,5 +722,3 @@ const VCAnalysisTool = () => {
     </div>
   );
 };
-
-export default VCAnalysisTool;

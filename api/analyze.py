@@ -7,7 +7,7 @@ from openai import OpenAI
 import csv, re
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["*"])  # Allow all origins during development
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -60,15 +60,16 @@ def analyze_companies():
             df[column_map['founding_year']] = pd.to_numeric(df[column_map['founding_year']], errors='coerce')
         
         def generate():
-
             total_rows = len(df)
+            all_results = []
             
             # Send initial progress update
             yield json.dumps({"type": "progress", "count": 0, "total": total_rows}) + "\n"
             
-            # Process in batches for better progress feedback
-            batch_size = min(10, total_rows)  # Process 10 rows at a time, or fewer if total < 10
+            # Process in much smaller batches to avoid timeouts
+            batch_size = min(5, total_rows)  # Smaller batch size to avoid timeouts
             
+            processed_count = 0
             for start_idx in range(0, total_rows, batch_size):
                 end_idx = min(start_idx + batch_size, total_rows)
                 batch_df = df.iloc[start_idx:end_idx]
@@ -76,54 +77,56 @@ def analyze_companies():
                 # Create a prompt for just this batch
                 batch_prompt = build_batch_prompt(batch_df, column_map, investing_text, weightings)
                 
-                # Call GPT for this batch
-                chat = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "Return ONLY valid JSON in the shape "
-                                '{"rows":[{<csv row fields>, "investability_score":<0‑10>}, …]}.'
-                            ),
-                        },
-                        {"role": "user", "content": batch_prompt},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.2,
-                    max_tokens=10096,
-                )
+                # Call OpenAI for this batch with a timeout
+                try:
+                    chat = client.chat.completions.create(
+                        model="gpt-3.5-turbo",  # Use a faster model to avoid timeouts
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": (
+                                    "Return ONLY valid JSON in the shape "
+                                    '{"rows":[{<csv row fields>, "investability_score":<0‑10>}, …]}.'
+                                ),
+                            },
+                            {"role": "user", "content": batch_prompt},
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.2,
+                        max_tokens=4000,  # Reduced token limit for faster responses
+                        timeout=30,  # 30 second timeout for OpenAI API call
+                    )
+                    
+                    # Extract results for this batch
+                    batch_results = json.loads(chat.choices[0].message.content)["rows"]
+                    all_results.extend(batch_results)
+                    
+                    # Update processed count
+                    processed_count = end_idx
+                    
+                except Exception as e:
+                    print(f"Error processing batch {start_idx}-{end_idx}: {str(e)}")
+                    # Continue with next batch even if this one fails
                 
-                # Update progress
+                # Update progress after each batch
                 yield json.dumps({
                     "type": "progress", 
-                    "count": end_idx, 
+                    "count": processed_count, 
                     "total": total_rows
                 }) + "\n"
+                
+                # Send partial results for each batch to avoid waiting for everything
+                if all_results:
+                    yield json.dumps({
+                        "type": "partial_results",
+                        "results": all_results
+                    }) + "\n"
             
-            # After all batches are processed, get the final score
-            final_prompt = build_batch_prompt(df, column_map, investing_text, weightings)
-            
-            final_chat = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Return ONLY valid JSON in the shape "
-                            '{"rows":[{<csv row fields>, "investability_score":<0‑10>}, …]}.'
-                        ),
-                    },
-                    {"role": "user", "content": final_prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,
-                max_tokens=10096,
-            )
-            
-            # Send the final results
-            rows = json.loads(final_chat.choices[0].message.content)["rows"]
-            yield json.dumps({"type": "results", "results": rows}) + "\n"
+            # Send final results
+            yield json.dumps({
+                "type": "results", 
+                "results": all_results
+            }) + "\n"
         
         # Return a streaming response
         return Response(generate(), mimetype='application/x-ndjson')

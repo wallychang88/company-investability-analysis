@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Papa from "papaparse";
 
-/* ─────────────────── File‑format constants ─────────────────── */
-const HEADER_ROW_INDEX = 2;   // row 3 becomes the header after PapaParse skips blanks
-const DELIMITER = "\t";      // SourceScrub TSV export
-
 /* ───────────────────── Component ───────────────────────────── */
 export default function VCAnalysisTool() {
   /* ─────────────────────────── State ─────────────────────────── */
@@ -32,7 +28,7 @@ export default function VCAnalysisTool() {
 • have 80–300 employees
 • provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
 • are not overhyped application‑layer LLM SaaS products
-• and have a clear, defensible moat (e.g., proprietary data or network effects)`;
+• have a clear, defensible moat (e.g., proprietary data or network effects)`;
 
   const [investingCriteria, setInvestingCriteria] = useState(DEFAULT_THESIS);
   const [criteriaItems, setCriteriaItems] = useState([]);   // derived below
@@ -77,10 +73,10 @@ export default function VCAnalysisTool() {
       Papa.parse(uploaded, {
         delimiter: detectedDelimiter,
         header: false,
-        skipEmptyLines: true, // Keep empty lines to maintain row count
+        skipEmptyLines: false, // Keep empty lines to maintain row count
         complete: ({ data: full }) => {
           // The header is at row 3 (index 2 since arrays are 0‑indexed)
-          const HEADER_ROW_INDEX = 2;
+          const HEADER_ROW_INDEX = 4;
           
           // Extract headers from row 3
           const headers = full[HEADER_ROW_INDEX];

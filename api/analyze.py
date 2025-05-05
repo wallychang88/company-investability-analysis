@@ -7,7 +7,7 @@ from openai import OpenAI
 import csv, re
 
 app = Flask(__name__)
-CORS(app, origins=["https://company-investability-score.vercel.app"])
+CORS(app)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 

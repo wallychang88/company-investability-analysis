@@ -137,61 +137,96 @@ export default function VCAnalysisTool() {
 
   /* ───────────────────────── API call ───────────────────────── */
   const processData = async () => {
-    if (!parsedData.length) {
-      window.alert("Please upload a file before processing");
-      return;
+  if (!parsedData.length) {
+    window.alert("Please upload a file before processing");
+    return;
+  }
+
+  /** Ensure required columns are mapped */
+  const required = [
+    "employee_count",
+    "description",
+    "industries",
+    "specialties",
+    "products_services",
+    "end_markets",
+  ];
+  const missing = required.filter((c) => !columnMappings[c]);
+  if (missing.length) {
+    window.alert(`Please map the required columns: ${missing.join(", ")}`);
+    return;
+  }
+
+  setIsProcessing(true);
+  setProgress(0);
+  setResultCount(0);
+
+  try {
+    const csvString = Papa.unparse(parsedData);
+    const API_URL = "/api/analyze"; // relative path for Vercel
+
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        csv_data: csvString,
+        column_mappings: columnMappings,
+        investing_criteria: investingCriteria,
+        criteria_weights: criteriaItems,
+      }),
+    });
+
+    if (!response.ok) throw new Error("API request failed");
+    
+    // Get the reader for the stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    
+    // Read the stream
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      // Decode and add to buffer
+      buffer += decoder.decode(value, { stream: true });
+      
+      // Process complete lines
+      let lines = buffer.split('\n');
+      buffer = lines.pop(); // Keep the last incomplete line in the buffer
+      
+      for (const line of lines) {
+        if (line.trim() === '') continue;
+        
+        const data = JSON.parse(line);
+        
+        if (data.type === 'progress') {
+          // Update progress
+          setResultCount(data.count);
+          setProgress(Math.round((data.count / data.total) * 100));
+        } else if (data.type === 'results') {
+          // Final results
+          setProcessedData(data.results);
+        }
+      }
     }
-
-    /** Ensure required columns are mapped */
-    const required = [
-      "employee_count",
-      "description",
-      "industries",
-      "specialties",
-      "products_services",
-      "end_markets",
-    ];
-    const missing = required.filter((c) => !columnMappings[c]);
-    if (missing.length) {
-      window.alert(`Please map the required columns: ${missing.join(", ")}`);
-      return;
+    
+    // Process any remaining data in the buffer
+    if (buffer.trim() !== '') {
+      const data = JSON.parse(buffer);
+      if (data.type === 'results') {
+        setProcessedData(data.results);
+      }
     }
-
-    setIsProcessing(true);
-    setProgress(0);
-    setResultCount(0);
-
-    try {
-      const csvString = Papa.unparse(parsedData);
-      const API_URL = "/api/analyze"; // relative path for Vercel
-
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          csv_data: csvString,
-          column_mappings: columnMappings,
-          investing_criteria: investingCriteria,
-          criteria_weights: criteriaItems,
-        }),
-      });
-
-      if (!res.ok) throw new Error("API request failed");
-      const json = await res.json();
-
-      if (!json.success) throw new Error(json.error || "Unknown API error");
-
-      setProcessedData(json.results);
-      setResultCount(parsedData.length);
-      setProgress(100);
-    } catch (err) {
-      /* eslint-disable no-console */
-      console.error(err);
-      window.alert("An error occurred while processing the data. Please try again.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+    
+    setProgress(100);
+  } catch (err) {
+    console.error(err);
+    window.alert("An error occurred while processing the data. Please try again.");
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   const downloadResults = () => {
     if (!processedData.length) return;

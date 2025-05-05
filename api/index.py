@@ -6,7 +6,7 @@ import pandas as pd
 from openai import OpenAI
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://company-investability-score.vercel.app"])
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 

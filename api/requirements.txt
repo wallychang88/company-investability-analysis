@@ -3,3 +3,4 @@ flask-cors==4.0.0
 openai==1.23.0
 numpy==2.2.5          # first line installs a cp312 wheel
 pandas==2.2.3         # depends on numpy>=1.26
+httpx<0.27

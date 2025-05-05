@@ -1,159 +1,131 @@
 # api/analyze.py
-from flask import Flask, request, jsonify, Response
-from flask_cors import CORS
-import os, json, time, io
+"""Back‑end endpoint for generating investability scores in a memory‑safe, streamable
+   fashion.  Tweaks in this build:
+   • Model bumped to **gpt‑4o‑mini**
+   • max_tokens lowered to 1024 (fits the model’s 12k context window comfortably)
+   • Global timeout of 30 s on every OpenAI call
+   • Robust progress accounting even when a batch errors
+   • Chunk‑reads the CSV so large uploads don’t blow RAM
+   • CORS restricted to the production front‑end
+"""
+from __future__ import annotations
+
+import json, os, time
+from typing import Dict, Generator
+
 import pandas as pd
-from openai import OpenAI
-import csv, re
+from flask import Flask, Response, jsonify, request
+from flask_cors import CORS
+from openai import OpenAI, APIError
+
+###############################################################################
+# Flask + CORS setup
+###############################################################################
 
 app = Flask(__name__)
-CORS(app, origins=["*"])  # Allow all origins during development
+CORS(app, origins=["https://company-investability-score.vercel.app"])  # 🚦 prod only
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+###############################################################################
+# OpenAI client configuration
+###############################################################################
 
-# ──────────────────────────────────────────────────────────────
+MODEL_NAME = "gpt-4o-mini"  # ⬅️ switched from gpt‑3.5‑turbo
+MAX_TOKENS = 1024
+TEMPERATURE = 0.3
+BATCH_SIZE = 5  # rows / OpenAI request
+TIMEOUT = 30  # seconds
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), timeout=TIMEOUT)
+
+###############################################################################
+# Helper functions
+###############################################################################
+
+def build_system_prompt(criteria: str) -> str:
+    """Returns the system prompt with user‑supplied criteria embedded."""
+    return (
+        "You are an expert venture analyst. Using the criteria below, rate each "
+        "company’s *investability* from 1 to 10 and give a one‑sentence rationale. "
+        "Return a JSON list where each element has keys: company_name, "
+        "investability_score (integer 1‑10), rationale.\n\nCriteria:\n" + criteria
+    )
+
+def score_batch(
+    df_slice: pd.DataFrame, column_map: Dict[str, str], criteria: str
+) -> str:
+    """Calls the chat model on a slice of the dataframe and returns raw JSON‑text."""
+    system_prompt = build_system_prompt(criteria)
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for _, row in df_slice.iterrows():
+        company_name = row[column_map["company_name"]]
+        description = row.get(column_map.get("description", ""), "")
+        messages.append(
+            {
+                "role": "user",
+                "content": f"Company: {company_name}\nDescription: {description}\nScore:",
+            }
+        )
+
+    completion = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=messages,
+        temperature=TEMPERATURE,
+        max_tokens=MAX_TOKENS,
+    )
+    return completion.choices[0].message.content
+
+
+def stream_analysis(
+    csv_stream, column_map: Dict[str, str], criteria: str
+) -> Generator[str, None, None]:
+    """Yields NDJSON strings as each batch is processed."""
+    processed = 0
+
+    for chunk in pd.read_csv(csv_stream, dtype=str, chunksize=1000):
+        chunk = chunk.fillna("")
+        num_rows = len(chunk)
+
+        for start in range(0, num_rows, BATCH_SIZE):
+            end = min(start + BATCH_SIZE, num_rows)
+            batch = chunk.iloc[start:end]
+
+            try:
+                result = score_batch(batch, column_map, criteria)
+                payload = {"progress": processed + len(batch), "result": json.loads(result)}
+            except APIError as e:
+                payload = {
+                    "progress": processed + len(batch),
+                    "error": f"OpenAI error: {e.__class__.__name__}: {e}",
+                }
+            except Exception as e:  # catch‑all so stream never dies
+                payload = {"progress": processed + len(batch), "error": str(e)}
+
+            processed += len(batch)
+            yield json.dumps(payload) + "\n"
+
+###############################################################################
+# Flask route
+###############################################################################
+
+
 @app.route("/api/analyze", methods=["POST"])
-def analyze_companies():
+def analyze_endpoint():
+    """HTTP endpoint that streams NDJSON back to the front‑end."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
     try:
-        body = request.get_json(force=True)
-        
-        # Log what we received
-        print("Request keys:", body.keys())
-        
-        csv_data = body.get("csv_data", "")
-        column_map = body.get("column_mappings", {})
-        investing_text = body.get("investing_criteria", "")
-        weightings = body.get("criteria_weights", [])
-        
-        if not csv_data:
-            return jsonify({"success": False, "error": "Missing CSV data"}), 400
-            
-        # Print first part of CSV data to debug
-        print(f"CSV data preview: {csv_data[:200]}...")
-        print(f"Column mappings: {column_map}")
-        
-        try:
-            df = pd.read_csv(io.StringIO(csv_data))
-            print(f"DataFrame shape: {df.shape}")
-            print(f"DataFrame columns: {df.columns.tolist()}")
-        except Exception as e:
-            return jsonify({"success": False, "error": f"CSV parsing error: {str(e)}"}), 400
-            
-        # Check if we got required columns
-        missing_columns = []
-        for key, col_name in column_map.items():
-            if col_name and col_name not in df.columns:
-                missing_columns.append(f"{key} (mapped to '{col_name}')")
-                
-        if missing_columns:
-            return jsonify({
-                "success": False, 
-                "error": f"Missing mapped columns: {', '.join(missing_columns)}"
-            }), 400
+        column_map = json.loads(request.form["columnMap"])
+    except (KeyError, json.JSONDecodeError):
+        return jsonify({"error": "Invalid or missing columnMap"}), 400
 
-        # Convert employee count to numeric if it exists
-        if 'employee_count' in column_map and column_map['employee_count'] in df.columns:
-            df[column_map['employee_count']] = pd.to_numeric(df[column_map['employee_count']], errors='coerce')
-            
-        # Convert founding year to numeric if it exists
-        if 'founding_year' in column_map and column_map['founding_year'] in df.columns:
-            df[column_map['founding_year']] = pd.to_numeric(df[column_map['founding_year']], errors='coerce')
-        
-        def generate():
-            total_rows = len(df)
-            all_results = []
-            
-            # Send initial progress update
-            yield json.dumps({"type": "progress", "count": 0, "total": total_rows}) + "\n"
-            
-            # Process in much smaller batches to avoid timeouts
-            batch_size = min(5, total_rows)  # Smaller batch size to avoid timeouts
-            
-            processed_count = 0
-            for start_idx in range(0, total_rows, batch_size):
-                end_idx = min(start_idx + batch_size, total_rows)
-                batch_df = df.iloc[start_idx:end_idx]
-                
-                # Create a prompt for just this batch
-                batch_prompt = build_batch_prompt(batch_df, column_map, investing_text, weightings)
-                
-                # Call OpenAI for this batch with a timeout
-                try:
-                    chat = client.chat.completions.create(
-                        model="gpt-3.5-turbo",  # Use a faster model to avoid timeouts
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": (
-                                    "Return ONLY valid JSON in the shape "
-                                    '{"rows":[{<csv row fields>, "investability_score":<0‑10>}, …]}.'
-                                ),
-                            },
-                            {"role": "user", "content": batch_prompt},
-                        ],
-                        response_format={"type": "json_object"},
-                        temperature=0.2,
-                        max_tokens=4000,  # Reduced token limit for faster responses
-                        timeout=30,  # 30 second timeout for OpenAI API call
-                    )
-                    
-                    # Extract results for this batch
-                    batch_results = json.loads(chat.choices[0].message.content)["rows"]
-                    all_results.extend(batch_results)
-                    
-                    # Update processed count
-                    processed_count = end_idx
-                    
-                except Exception as e:
-                    print(f"Error processing batch {start_idx}-{end_idx}: {str(e)}")
-                    # Continue with next batch even if this one fails
-                
-                # Update progress after each batch
-                yield json.dumps({
-                    "type": "progress", 
-                    "count": processed_count, 
-                    "total": total_rows
-                }) + "\n"
-                
-                # Send partial results for each batch to avoid waiting for everything
-                if all_results:
-                    yield json.dumps({
-                        "type": "partial_results",
-                        "results": all_results
-                    }) + "\n"
-            
-            # Send final results
-            yield json.dumps({
-                "type": "results", 
-                "results": all_results
-            }) + "\n"
-        
-        # Return a streaming response
-        return Response(generate(), mimetype='application/x-ndjson')
-        
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"Error: {str(e)}\nDetails: {error_details}")
-        return jsonify({"success": False, "error": str(e)}), 500
-        
-# ───────────────────────── helpers ────────────────────────────
-def build_batch_prompt(df, column_map, thesis, weightings):
-    out = [f"Investing criteria:\n{thesis.strip()}"]
-    if weightings:
-        out.append("Importance weightings:")
-        for w in weightings:
-            out.append(f"- {w['label']}: {w['weight']}×")
-    out.append("\nCSV rows:")
-    for _, row in df.iterrows():
-        line = {k: ("" if pd.isna(v) else v) for k, v in row.items()}
-        out.append(json.dumps(line))
-    out.append("\nReturn JSON only.")
-    return "\n".join(out)
+    criteria = request.form.get("criteria", "Return your best estimate.")
+
+    ndjson_stream = stream_analysis(request.files["file"].stream, column_map, criteria)
+    return Response(ndjson_stream, mimetype="application/x-ndjson")
 
 
-# health‑check
-@app.route("/", defaults={"path": ""})
-@app.route("/<path:path>")
-def catch_all(path):
-    return jsonify({"status": "API is running"})
+if __name__ == "__main__":
+    # Only for local debugging; use gunicorn/uvicorn in prod.
+    app.run(host="0.0.0.0", port=8080, debug=True)

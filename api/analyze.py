@@ -20,17 +20,8 @@ def analyze_companies():
         column_map      = body["column_mappings"]
         investing_text  = body["investing_criteria"]
         weightings      = body.get("criteria_weights", [])
-
-        # parse CSV
-        df = pd.read_csv(
-        io.StringIO(csv_data),
-        skiprows=4,        # ← rows 1‑4 ignored
-        header=0,          # ← row 5 becomes column names
-        skip_blank_lines=True,
-        sep=None,          # lets pandas autodetect comma vs. tab
-        engine="python"    # python engine handles tabs well
-     )
-
+        
+        df = pd.read_csv(io.StringIO(csv_data))
 
         # score the ENTIRE batch once
         prompt = build_batch_prompt(df, column_map,

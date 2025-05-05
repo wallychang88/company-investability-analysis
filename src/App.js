@@ -197,20 +197,43 @@ const handleFileUpload = (e) => {
     }
   };
 
-  const downloadResults = () => {
-    if (!processedData.length) return;
-    const csv = Papa.unparse(processedData);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
+const downloadResults = () => {
+  if (!processedData.length) return;
+  
+  // Create a new array with all the original columns and data,
+  // with the investability score added as a new column
+  const outputData = processedData.map(row => {
+    // Start with a copy of the original row
+    const outputRow = { ...row };
+    
+    // Make sure the investability score is the last column
+    // by temporarily removing it
+    const score = outputRow.investability_score;
+    delete outputRow.investability_score;
+    
+    // Add it back as the final column
+    outputRow.investability_score = score;
+    
+    return outputRow;
+  });
+  
+  // Generate CSV with all columns preserved
+  const csv = Papa.unparse(outputData, {
+    columns: [...headers, 'investability_score'] // Ensure all original headers + score
+  });
+  
+  // Create and trigger download
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "investability_analysis.csv";
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "investability_analysis.csv";
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
   /* ─────────────────────────── UI ─────────────────────────── */
   return (
@@ -627,38 +650,49 @@ const handleFileUpload = (e) => {
                   5. Analysis Results
                 </h2>
 
-                {/* Top 5 table */}
-                <div>
-                  <h3 className="font-medium text-gray-700 mb-4">Top Companies by Investability Score</h3>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          {headers.slice(0, 3).map((h) => (
-                            <th
-                              key={h}
-                              className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider"
-                            >
-                              {h}
-                            </th>
-                          ))}
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
-                            Investability Score
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {processedData
-                          .slice()
-                          .sort((a, b) => b.investability_score - a.investability_score)
-                          .slice(0, 5)
-                          .map((row, idx) => (
+               {/* Top 5 table */}
+              <div>
+                <h3 className="font-medium text-gray-700 mb-4">Top Companies by Investability Score</h3>
+                <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          Company Name
+                        </th>
+                        <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          Founding Year
+                        </th>
+                        <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          Employee Count
+                        </th>
+                        <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          Investability Score
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {processedData
+                        .slice()
+                        .sort((a, b) => b.investability_score - a.investability_score)
+                        .slice(0, 5)
+                        .map((row, idx) => {
+                          // Find the appropriate column names from mappings
+                          const companyNameColumn = headers.find(h => h.toLowerCase().includes('company') || h.toLowerCase().includes('name'));
+                          const foundingYearColumn = columnMappings.founding_year;
+                          const employeeCountColumn = columnMappings.employee_count;
+                          
+                          return (
                             <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
-                              {headers.slice(0, 3).map((h) => (
-                                <td key={h} className="px-6 py-4 whitespace-nowrap text-gray-700">
-                                  {row[h]}
-                                </td>
-                              ))}
+                              <td className="px-6 py-4 whitespace-nowrap text-gray-700">
+                                {companyNameColumn ? row[companyNameColumn] : "N/A"}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-gray-700">
+                                {foundingYearColumn ? row[foundingYearColumn] : "N/A"}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-gray-700">
+                                {employeeCountColumn ? row[employeeCountColumn] : "N/A"}
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span
                                   className={`px-3 py-1 inline-flex text-sm font-bold rounded-full ${
@@ -673,11 +707,12 @@ const handleFileUpload = (e) => {
                                 </span>
                               </td>
                             </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
+                          );
+                        })}
+                    </tbody>
+                  </table>
                 </div>
+              </div>
 
                 {/* Score distribution */}
                 <div className="p-6 bg-gray-50 rounded-lg shadow-inner">

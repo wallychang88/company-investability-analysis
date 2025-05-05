@@ -50,80 +50,80 @@ export default function VCAnalysisTool() {
     );
   }, [investingCriteria]);
 
-  /* ─────────── File upload → parse CSV with header at row 5 ─────────── */
-const handleFileUpload = (e) => {
-  const uploaded = e.target.files[0];
-  if (!uploaded) return;
-  setFile(uploaded);
+  /* ─────────── File upload → parse CSV with header at row 3 ─────────── */
+  const handleFileUpload = (e) => {
+    const uploaded = e.target.files[0];
+    if (!uploaded) return;
+    setFile(uploaded);
 
-  // First, let's auto-detect the delimiter
-  const fileReader = new FileReader();
-  fileReader.onload = (event) => {
-    const sample = event.target.result.slice(0, 2000); // Get a sample of the file
-    
-    // Auto-detect the delimiter by checking for common ones
-    let detectedDelimiter = ','; // Default to comma (CSV)
-    
-    // Check if it's more likely a TSV
-    const tabCount = (sample.match(/\t/g) || []).length;
-    const commaCount = (sample.match(/,/g) || []).length;
-    
-    // If there are more tabs than commas, assume it's a TSV
-    if (tabCount > commaCount) {
-      detectedDelimiter = '\t';
-    }
-    
-    // Parse the entire file, maintaining empty lines
-    Papa.parse(uploaded, {
-      delimiter: detectedDelimiter,
-      header: false,
-      skipEmptyLines: false, // Keep empty lines to maintain row count
-      complete: ({ data: full }) => {
-        // The header is at row 5 (index 4 since arrays are 0-indexed)
-        const HEADER_ROW_INDEX = 4;
-        
-        // Extract headers from row 5
-        const headers = full[HEADER_ROW_INDEX];
-        
-        // Skip header row and process all data rows
-        const rows = full.slice(HEADER_ROW_INDEX + 1).map((row) => {
-          const o = {};
-          headers.forEach((h, i) => {
-            if (h) {
-              o[h.trim()] = row[i];
-            }
-          });
-          return o;
-        }).filter(row => Object.keys(row).length > 0); // Filter out empty rows
+    // First, let's auto-detect the delimiter
+    const fileReader = new FileReader();
+    fileReader.onload = (event) => {
+      const sample = event.target.result.slice(0, 2000); // Get a sample of the file
+      
+      // Auto-detect the delimiter by checking for common ones
+      let detectedDelimiter = ','; // Default to comma (CSV)
+      
+      // Check if it's more likely a TSV
+      const tabCount = (sample.match(/\t/g) || []).length;
+      const commaCount = (sample.match(/,/g) || []).length;
+      
+      // If there are more tabs than commas, assume it's a TSV
+      if (tabCount > commaCount) {
+        detectedDelimiter = '\t';
+      }
+      
+      // Parse the entire file, maintaining empty lines
+      Papa.parse(uploaded, {
+        delimiter: detectedDelimiter,
+        header: false,
+        skipEmptyLines: false, // Keep empty lines to maintain row count
+        complete: ({ data: full }) => {
+          // The header is at row 3 (index 2 since arrays are 0‑indexed)
+          const HEADER_ROW_INDEX = 2;
+          
+          // Extract headers from row 3
+          const headers = full[HEADER_ROW_INDEX];
+          
+          // Skip header row and process all data rows
+          const rows = full.slice(HEADER_ROW_INDEX + 1).map((row) => {
+            const o = {};
+            headers.forEach((h, i) => {
+              if (h) {
+                o[h.trim()] = row[i];
+              }
+            });
+            return o;
+          }).filter(row => Object.keys(row).length > 0); // Filter out empty rows
 
-        setParsedData(rows);
-        setHeaders(headers.filter(Boolean).map((h) => h.trim()));
+          setParsedData(rows);
+          setHeaders(headers.filter(Boolean).map((h) => h.trim()));
 
-        /* Auto‑map column names */
-        const lower = headers.map((h) => h?.toLowerCase().trim() || "");
-        const findHdr = (needle) => {
-          const idx = lower.indexOf(needle);
-          return idx !== -1 ? headers[idx].trim() : "";
-        };
+          /* Auto‑map column names */
+          const lower = headers.map((h) => h?.toLowerCase().trim() || "");
+          const findHdr = (needle) => {
+            const idx = lower.indexOf(needle);
+            return idx !== -1 ? headers[idx].trim() : "";
+          };
 
-        const autoMap = {
-          employee_count:    findHdr("employee count"),
-          description:       findHdr("description"),
-          industries:        findHdr("industries"),
-          specialties:       findHdr("specialties"),
-          products_services: findHdr("products and services") || findHdr("products & services"),
-          end_markets:       findHdr("end markets"),
-          country:           findHdr("country"),
-          ownership:         findHdr("ownership"),
-          founding_year:     findHdr("founding year") || findHdr("founded"),
-        };
-        setColumnMappings((cm) => ({ ...cm, ...autoMap }));
-      },
-    });
+          const autoMap = {
+            employee_count:    findHdr("employee count"),
+            description:       findHdr("description"),
+            industries:        findHdr("industries"),
+            specialties:       findHdr("specialties"),
+            products_services: findHdr("products and services") || findHdr("products & services"),
+            end_markets:       findHdr("end markets"),
+            country:           findHdr("country"),
+            ownership:         findHdr("ownership"),
+            founding_year:     findHdr("founding year") || findHdr("founded"),
+          };
+          setColumnMappings((cm) => ({ ...cm, ...autoMap }));
+        },
+      });
+    };
+    
+    fileReader.readAsText(uploaded);
   };
-  
-  fileReader.readAsText(uploaded);
-};
 
   const handleColumnMappingChange = (field, value) =>
     setColumnMappings((cm) => ({ ...cm, [field]: value }));
@@ -197,43 +197,43 @@ const handleFileUpload = (e) => {
     }
   };
 
-const downloadResults = () => {
-  if (!processedData.length) return;
-  
-  // Create a new array with all the original columns and data,
-  // with the investability score added as a new column
-  const outputData = processedData.map(row => {
-    // Start with a copy of the original row
-    const outputRow = { ...row };
+  const downloadResults = () => {
+    if (!processedData.length) return;
     
-    // Make sure the investability score is the last column
-    // by temporarily removing it
-    const score = outputRow.investability_score;
-    delete outputRow.investability_score;
+    // Create a new array with all the original columns and data,
+    // with the investability score added as a new column
+    const outputData = processedData.map(row => {
+      // Start with a copy of the original row
+      const outputRow = { ...row };
+      
+      // Make sure the investability score is the last column
+      // by temporarily removing it
+      const score = outputRow.investability_score;
+      delete outputRow.investability_score;
+      
+      // Add it back as the final column
+      outputRow.investability_score = score;
+      
+      return outputRow;
+    });
     
-    // Add it back as the final column
-    outputRow.investability_score = score;
+    // Generate CSV with all columns preserved
+    const csv = Papa.unparse(outputData, {
+      columns: [...headers, 'investability_score'] // Ensure all original headers + score
+    });
     
-    return outputRow;
-  });
-  
-  // Generate CSV with all columns preserved
-  const csv = Papa.unparse(outputData, {
-    columns: [...headers, 'investability_score'] // Ensure all original headers + score
-  });
-  
-  // Create and trigger download
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
+    // Create and trigger download
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
 
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "investability_analysis.csv";
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "investability_analysis.csv";
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   /* ─────────────────────────── UI ─────────────────────────── */
   return (

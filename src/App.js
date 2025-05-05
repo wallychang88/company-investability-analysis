@@ -166,6 +166,13 @@ export default function VCAnalysisTool() {
       quotes: true, // Ensure strings with commas are quoted
       header: true  // Include headers
     });
+    
+    // For debugging, check what's being sent to the API
+    console.log("Sending data to API:");
+    console.log("Column mappings:", columnMappings);
+    console.log("Criteria:", investingCriteria);
+    console.log("Criteria weights:", criteriaItems);
+    
     const API_URL = "/api/analyze"; // relative path for Vercel
 
     const response = await fetch(API_URL, {
@@ -179,7 +186,11 @@ export default function VCAnalysisTool() {
       }),
     });
 
-    if (!response.ok) throw new Error("API request failed");
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("API error response:", errorText);
+      throw new Error(`API request failed: ${response.status} - ${errorText}`);
+    }
     
     // Get the reader for the stream
     const reader = response.body.getReader();
@@ -189,29 +200,41 @@ export default function VCAnalysisTool() {
     // Read the stream
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      
+      // Add debugging
+      console.log("Stream read - done:", done, "value length:", value ? value.length : 0);
+      
+      if (done) {
+        console.log("Stream complete, final buffer:", buffer);
+        break;
+      }
       
       // Decode and add to buffer
       buffer += decoder.decode(value, { stream: true });
+      console.log("Current buffer:", buffer);
       
       // Process complete lines
       let lines = buffer.split('\n');
       buffer = lines.pop(); // Keep the last incomplete line in the buffer
       
+      console.log(`Processing ${lines.length} complete lines, remaining buffer:`, buffer);
+      
       for (const line of lines) {
         if (line.trim() === '') continue;
         
         try {
+          console.log("Processing line:", line);
           const data = JSON.parse(line);
-          console.log("Received data:", data); // Add debugging
+          console.log("Parsed data:", data);
           
           if (data.type === 'progress') {
             // Update progress
+            console.log(`Progress update: ${data.count}/${data.total}`);
             setResultCount(data.count);
             setProgress(Math.round((data.count / data.total) * 100));
           } else if (data.type === 'results') {
             // Final results
-            console.log("Setting processed data:", data.results);
+            console.log("Got final results:", data.results);
             setProcessedData(data.results);
           }
         } catch (error) {
@@ -222,26 +245,27 @@ export default function VCAnalysisTool() {
     
     // Make sure to process any remaining data at the end
     if (buffer.trim() !== '') {
+      console.log("Processing remaining buffer:", buffer);
       try {
         const data = JSON.parse(buffer);
-        console.log("Processing final buffer:", data);
+        console.log("Parsed final buffer data:", data);
         if (data.type === 'results') {
           console.log("Setting final processed data:", data.results);
           setProcessedData(data.results);
         }
       } catch (error) {
-        console.error("Error parsing final buffer:", error);
+        console.error("Error parsing final buffer:", error, "Buffer:", buffer);
       }
     }
     
     setProgress(100);
   } catch (err) {
-    console.error(err);
-    window.alert("An error occurred while processing the data. Please try again.");
+    console.error("Error in processData:", err);
+    window.alert(`An error occurred while processing the data: ${err.message}`);
   } finally {
     setIsProcessing(false);
   }
-}; // First missing closing brace here
+};
 
 const downloadResults = () => {
   if (!processedData.length) return;

@@ -160,6 +160,7 @@ export default function VCAnalysisTool() {
   setIsProcessing(true);
   setProgress(0);
   setResultCount(0);
+  setProcessedData([]); // Clear any existing results
 
   try {
     const csvString = Papa.unparse(parsedData, {
@@ -167,12 +168,7 @@ export default function VCAnalysisTool() {
       header: true  // Include headers
     });
     
-    // For debugging, check what's being sent to the API
-    console.log("Sending data to API:");
-    console.log("Column mappings:", columnMappings);
-    console.log("Criteria:", investingCriteria);
-    console.log("Criteria weights:", criteriaItems);
-    
+    console.log("Starting API request...");
     const API_URL = "/api/analyze"; // relative path for Vercel
 
     const response = await fetch(API_URL, {
@@ -187,10 +183,12 @@ export default function VCAnalysisTool() {
     });
 
     if (!response.ok) {
+      console.error("API response not OK:", response.status, response.statusText);
       const errorText = await response.text();
-      console.error("API error response:", errorText);
       throw new Error(`API request failed: ${response.status} - ${errorText}`);
     }
+    
+    console.log("API response received, starting to read stream...");
     
     // Get the reader for the stream
     const reader = response.body.getReader();
@@ -201,40 +199,38 @@ export default function VCAnalysisTool() {
     while (true) {
       const { done, value } = await reader.read();
       
-      // Add debugging
-      console.log("Stream read - done:", done, "value length:", value ? value.length : 0);
-      
       if (done) {
-        console.log("Stream complete, final buffer:", buffer);
+        console.log("Stream reading complete");
         break;
       }
       
       // Decode and add to buffer
-      buffer += decoder.decode(value, { stream: true });
-      console.log("Current buffer:", buffer);
+      const chunk = decoder.decode(value, { stream: true });
+      buffer += chunk;
+      console.log(`Received chunk of ${chunk.length} bytes`);
       
       // Process complete lines
       let lines = buffer.split('\n');
       buffer = lines.pop(); // Keep the last incomplete line in the buffer
       
-      console.log(`Processing ${lines.length} complete lines, remaining buffer:`, buffer);
-      
       for (const line of lines) {
         if (line.trim() === '') continue;
         
         try {
-          console.log("Processing line:", line);
           const data = JSON.parse(line);
-          console.log("Parsed data:", data);
           
           if (data.type === 'progress') {
             // Update progress
             console.log(`Progress update: ${data.count}/${data.total}`);
             setResultCount(data.count);
             setProgress(Math.round((data.count / data.total) * 100));
+          } else if (data.type === 'partial_results') {
+            // Update with partial results as they come in
+            console.log(`Received partial results with ${data.results.length} items`);
+            setProcessedData(data.results);
           } else if (data.type === 'results') {
             // Final results
-            console.log("Got final results:", data.results);
+            console.log(`Received final results with ${data.results.length} items`);
             setProcessedData(data.results);
           }
         } catch (error) {
@@ -243,25 +239,27 @@ export default function VCAnalysisTool() {
       }
     }
     
-    // Make sure to process any remaining data at the end
+    // Process any remaining data
     if (buffer.trim() !== '') {
-      console.log("Processing remaining buffer:", buffer);
       try {
         const data = JSON.parse(buffer);
-        console.log("Parsed final buffer data:", data);
         if (data.type === 'results') {
-          console.log("Setting final processed data:", data.results);
+          console.log(`Processing final buffer with ${data.results.length} results`);
+          setProcessedData(data.results);
+        } else if (data.type === 'partial_results') {
+          console.log(`Processing final buffer with ${data.results.length} partial results`);
           setProcessedData(data.results);
         }
       } catch (error) {
-        console.error("Error parsing final buffer:", error, "Buffer:", buffer);
+        console.error("Error parsing final buffer:", error);
       }
     }
     
     setProgress(100);
+    console.log("Processing complete!");
   } catch (err) {
     console.error("Error in processData:", err);
-    window.alert(`An error occurred while processing the data: ${err.message}`);
+    window.alert(`An error occurred: ${err.message}`);
   } finally {
     setIsProcessing(false);
   }

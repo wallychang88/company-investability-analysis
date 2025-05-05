@@ -619,7 +619,7 @@ const VCAnalysisTool = () => {
                   </div>
 
                   <p className="text-center text-sm text-gray-500">
-                    {progress < 100 ? "Analyzing company data using advanced AI..." : "Analysis complete!"}
+                    {progress < 100 ? "Analyzing..." : "Analysis complete!"}
                   </p>
                 </div>
               </section>

@@ -83,59 +83,111 @@ const VCAnalysisTool = () => {
 
     setFile(uploaded);
 
-    /** First run – preview few rows so we can grab the header row. */
-    Papa.parse(uploaded, {
-      header: false,
-      preview: 10,
-      skipEmptyLines: true,
-      complete: ({ data }) => {
-        const headerRow = data[2] || []; // row 3 (index 2)
+    const HEADER_ROW_INDEX = 2; // row 3 after blanks are skipped
+const DELIMITER = "\t"; // SourceScrub exports are tab‑separated
 
-        // Second pass – full parse using detected headers
+const VCAnalysisTool = () => {
+  /* ─────────────────────────── State ─────────────────────────── */
+  const [file, setFile] = useState(null);
+  const [parsedData, setParsedData] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [processedData, setProcessedData] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [resultCount, setResultCount] = useState(0);
+
+  const [columnMappings, setColumnMappings] = useState({
+    employee_count: "",
+    description: "",
+    industries: "",
+    specialties: "",
+    products_services: "",
+    end_markets: "",
+    country: "",
+    ownership: "",
+    founding_year: "",
+  });
+
+  const [investingCriteria, setInvestingCriteria] = useState(`We invest in enterprise SaaS and managed services companies that:
+• have 80–300 employees
+• provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
+• are not overhyped application‑layer LLM SaaS products
+• and have a clear, defensible moat (e.g., proprietary data or network effects)`);
+
+  const [criteriaItems, setCriteriaItems] = useState([]);
+
+  /* ────────────────────── Helpers / effects ───────────────────── */
+  useEffect(() => {
+    const bullets = investingCriteria
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("•"))
+      .map((l) => l.slice(1).trim());
+
+    const newItems = bullets.map((text, i) => ({
+      id: `criteria_${i}`,
+      label: text,
+      weight: 1.0,
+    }));
+    setCriteriaItems(newItems);
+  }, [investingCriteria]);
+
+  /* ───────────────────── File upload & parsing ────────────────── */
+  const handleFileUpload = (e) => {
+    const uploaded = e.target.files[0];
+    if (!uploaded) return;
+    setFile(uploaded);
+
+    /** Pass 1 – read small preview to get header row **/
+    Papa.parse(uploaded, {
+      delimiter: DELIMITER,
+      header: false,
+      preview: HEADER_ROW_INDEX + 1, // read at least until header row
+      skipEmptyLines: true,
+      complete: ({ data: preview }) => {
+        const headersDetected = preview[HEADER_ROW_INDEX];
+
+        /** Pass 2 – full parse using detected header **/
         Papa.parse(uploaded, {
+          delimiter: DELIMITER,
           header: false,
           skipEmptyLines: true,
           complete: ({ data: full }) => {
-            const headersDetected = full[2];
-            const rows = full.slice(3).map((row) => {
+            const rows = full.slice(HEADER_ROW_INDEX + 1).map((row) => {
               const obj = {};
               headersDetected.forEach((h, i) => {
-                if (h) obj[h] = row[i];
+                if (h) obj[h.trim()] = row[i];
               });
               return obj;
             });
 
             setParsedData(rows);
-            setHeaders(headersDetected.filter(Boolean));
+            setHeaders(headersDetected.filter(Boolean).map((h) => h.trim()));
 
-            /* Attempt automatic column mapping */
-            const autoMap = {};
-            const lower = headersDetected.map((h) => (h ? h.toLowerCase() : ""));
-
+            /* Auto‑map common columns */
+            const lower = headersDetected.map((h) => (h ? h.toLowerCase().trim() : ""));
             const find = (needle) => {
               const idx = lower.indexOf(needle);
-              return idx !== -1 ? headersDetected[idx] : "";
+              return idx !== -1 ? headersDetected[idx].trim() : "";
             };
 
-            autoMap.employee_count = find("employee count");
-            autoMap.description = find("description");
-            autoMap.industries = find("industries");
-            autoMap.specialties = find("specialties");
-            autoMap.end_markets = find("end markets");
-            autoMap.country = find("country");
-            autoMap.ownership = find("ownership");
+            const autoMap = {
+              employee_count: find("employee count"),
+              description: find("description"),
+              industries: find("industries"),
+              specialties: find("specialties"),
+              end_markets: find("end markets"),
+              country: find("country"),
+              ownership: find("ownership"),
+              founding_year: find("founding year") || find("founded"),
+            };
 
-            // products & services – deal with two possible labels
-            const prodIdx = lower.indexOf("products and services") !== -1
-              ? lower.indexOf("products and services")
-              : lower.indexOf("products & services");
-            if (prodIdx !== -1) autoMap.products_services = headersDetected[prodIdx];
-
-            // founding year / founded
-            const fyIdx = lower.indexOf("founding year") !== -1
-              ? lower.indexOf("founding year")
-              : lower.indexOf("founded");
-            if (fyIdx !== -1) autoMap.founding_year = headersDetected[fyIdx];
+            // Handle Products & Services label variants
+            const prodIdx =
+              lower.indexOf("products and services") !== -1
+                ? lower.indexOf("products and services")
+                : lower.indexOf("products & services");
+            if (prodIdx !== -1) autoMap.products_services = headersDetected[prodIdx].trim();
 
             setColumnMappings((cm) => ({ ...cm, ...autoMap }));
           },

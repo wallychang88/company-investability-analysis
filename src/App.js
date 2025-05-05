@@ -201,35 +201,46 @@ export default function VCAnalysisTool() {
       for (const line of lines) {
         if (line.trim() === '') continue;
         
-        const data = JSON.parse(line);
-        
-        if (data.type === 'progress') {
-          // Update progress
-          setResultCount(data.count);
-          setProgress(Math.round((data.count / data.total) * 100));
-        } else if (data.type === 'results') {
-          // Final results
-          setProcessedData(data.results);
+        try {
+          const data = JSON.parse(line);
+          console.log("Received data:", data); // Add debugging
+          
+          if (data.type === 'progress') {
+            // Update progress
+            setResultCount(data.count);
+            setProgress(Math.round((data.count / data.total) * 100));
+          } else if (data.type === 'results') {
+            // Final results
+            console.log("Setting processed data:", data.results);
+            setProcessedData(data.results);
+          }
+        } catch (error) {
+          console.error("Error parsing JSON:", error, "Line:", line);
         }
       }
     }
     
-    // Process any remaining data in the buffer
+    // Make sure to process any remaining data at the end
     if (buffer.trim() !== '') {
-      const data = JSON.parse(buffer);
-      if (data.type === 'results') {
-        setProcessedData(data.results);
+      try {
+        const data = JSON.parse(buffer);
+        console.log("Processing final buffer:", data);
+        if (data.type === 'results') {
+          console.log("Setting final processed data:", data.results);
+          setProcessedData(data.results);
+        }
+      } catch (error) {
+        console.error("Error parsing final buffer:", error);
       }
     }
     
     setProgress(100);
-  } catch (err) {
-    console.error(err);
-    window.alert("An error occurred while processing the data. Please try again.");
-  } finally {
-    setIsProcessing(false);
-  }
-};
+    } catch (err) {
+      console.error(err);
+      window.alert("An error occurred while processing the data. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    };
 
   const downloadResults = () => {
     if (!processedData.length) return;

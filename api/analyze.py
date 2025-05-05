@@ -49,8 +49,7 @@ def analyze_companies():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
-
+        
 # ───────────────────────── helpers ────────────────────────────
 def build_batch_prompt(df, column_map, thesis, weightings):
     out = [f"Investing criteria:\n{thesis.strip()}"]

@@ -50,61 +50,80 @@ export default function VCAnalysisTool() {
     );
   }, [investingCriteria]);
 
-  /* ─────────── File upload → parse TSV ─────────── */
-  const handleFileUpload = (e) => {
-    const uploaded = e.target.files[0];
-    if (!uploaded) return;
-    setFile(uploaded);
+  /* ─────────── File upload → parse CSV with header at row 5 ─────────── */
+const handleFileUpload = (e) => {
+  const uploaded = e.target.files[0];
+  if (!uploaded) return;
+  setFile(uploaded);
 
-    // Pass 1 – peek at first rows
+  // First, let's auto-detect the delimiter
+  const fileReader = new FileReader();
+  fileReader.onload = (event) => {
+    const sample = event.target.result.slice(0, 2000); // Get a sample of the file
+    
+    // Auto-detect the delimiter by checking for common ones
+    let detectedDelimiter = ','; // Default to comma (CSV)
+    
+    // Check if it's more likely a TSV
+    const tabCount = (sample.match(/\t/g) || []).length;
+    const commaCount = (sample.match(/,/g) || []).length;
+    
+    // If there are more tabs than commas, assume it's a TSV
+    if (tabCount > commaCount) {
+      detectedDelimiter = '\t';
+    }
+    
+    // Parse the entire file, maintaining empty lines
     Papa.parse(uploaded, {
-      delimiter: DELIMITER,
+      delimiter: detectedDelimiter,
       header: false,
-      preview: HEADER_ROW_INDEX + 1,
-      skipEmptyLines: true,
-      complete: ({ data: preview }) => {
-        const headersDetected = preview[HEADER_ROW_INDEX];
+      skipEmptyLines: false, // Keep empty lines to maintain row count
+      complete: ({ data: full }) => {
+        // The header is at row 5 (index 4 since arrays are 0-indexed)
+        const HEADER_ROW_INDEX = 4;
+        
+        // Extract headers from row 5
+        const headers = full[HEADER_ROW_INDEX];
+        
+        // Skip header row and process all data rows
+        const rows = full.slice(HEADER_ROW_INDEX + 1).map((row) => {
+          const o = {};
+          headers.forEach((h, i) => {
+            if (h) {
+              o[h.trim()] = row[i];
+            }
+          });
+          return o;
+        }).filter(row => Object.keys(row).length > 0); // Filter out empty rows
 
-        // Pass 2 – full parse with detected header
-        Papa.parse(uploaded, {
-          delimiter: DELIMITER,
-          header: false,
-          skipEmptyLines: true,
-          complete: ({ data: full }) => {
-            // Build array of objects keyed by header text
-            const rows = full.slice(HEADER_ROW_INDEX + 1).map((row) => {
-              const o = {};
-              headersDetected.forEach((h, i) => h && (o[h.trim()] = row[i]));
-              return o;
-            });
+        setParsedData(rows);
+        setHeaders(headers.filter(Boolean).map((h) => h.trim()));
 
-            setParsedData(rows);
-            setHeaders(headersDetected.filter(Boolean).map((h) => h.trim()));
+        /* Auto‑map column names */
+        const lower = headers.map((h) => h?.toLowerCase().trim() || "");
+        const findHdr = (needle) => {
+          const idx = lower.indexOf(needle);
+          return idx !== -1 ? headers[idx].trim() : "";
+        };
 
-            /* Auto‑map a few obvious columns */
-            const lower = headersDetected.map((h) => h?.toLowerCase().trim() || "");
-            const findHdr = (needle) => {
-              const idx = lower.indexOf(needle);
-              return idx !== -1 ? headersDetected[idx].trim() : "";
-            };
-
-            const autoMap = {
-              employee_count:    findHdr("employee count"),
-              description:       findHdr("description"),
-              industries:        findHdr("industries"),
-              specialties:       findHdr("specialties"),
-              products_services: findHdr("products and services") || findHdr("products & services"),
-              end_markets:       findHdr("end markets"),
-              country:           findHdr("country"),
-              ownership:         findHdr("ownership"),
-              founding_year:     findHdr("founding year") || findHdr("founded"),
-            };
-            setColumnMappings((cm) => ({ ...cm, ...autoMap }));
-          },
-        });
+        const autoMap = {
+          employee_count:    findHdr("employee count"),
+          description:       findHdr("description"),
+          industries:        findHdr("industries"),
+          specialties:       findHdr("specialties"),
+          products_services: findHdr("products and services") || findHdr("products & services"),
+          end_markets:       findHdr("end markets"),
+          country:           findHdr("country"),
+          ownership:         findHdr("ownership"),
+          founding_year:     findHdr("founding year") || findHdr("founded"),
+        };
+        setColumnMappings((cm) => ({ ...cm, ...autoMap }));
       },
     });
   };
+  
+  fileReader.readAsText(uploaded);
+};
 
   const handleColumnMappingChange = (field, value) =>
     setColumnMappings((cm) => ({ ...cm, [field]: value }));

@@ -544,12 +544,13 @@ const TopTable = () => {
           formattedUrl = 'https://' + formattedUrl;
         }
         
-        // Get the founding year - directly access the column mapped by the user
-        const foundingCol = columnMap.founding_year || "";
-        const foundingYear = foundingCol && originalData[foundingCol] 
-          ? originalData[foundingCol] 
-          : 'N/A';
+        // Look specifically for "Founding Year" in the CSV
+        let foundingYear = 'N/A';
+        if (originalData["Founding Year"] && originalData["Founding Year"].trim()) {
+          foundingYear = originalData["Founding Year"];
+        }
           
+        // Get employee count
         const employeeCount = columnMap.employee_count && originalData[columnMap.employee_count]
           ? originalData[columnMap.employee_count]
           : 'N/A';

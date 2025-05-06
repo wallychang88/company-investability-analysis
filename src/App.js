@@ -665,32 +665,34 @@ const TopTable = () => {
 
         {/* 2. Preview */}
         {parsedData.length > 0 && (
-          <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white overflow-x-auto">
+          <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white">
             <h2 className="text-xl font-semibold text-blue-800 mb-4">CSV Preview</h2>
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  {headers.map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {parsedData.slice(0, 5).map((row, idx) => (
-                  <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
                     {headers.map((h) => (
-                      <td key={h} className="px-4 py-3 whitespace-normal text-gray-700 max-w-xs truncate">
-                        {row[h] && typeof row[h] === 'string' && row[h].length > 100 
-                          ? `${row[h].substring(0, 100)}...` 
-                          : row[h]}
-                      </td>
+                      <th key={h} className="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                        {h}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {parsedData.slice(0, 5).map((row, idx) => (
+                    <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
+                      {headers.map((h) => (
+                        <td key={h} className="px-4 py-3 text-gray-700">
+                          <div className="max-w-xs overflow-hidden text-ellipsis whitespace-nowrap">
+                            {row[h]}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="text-right text-xs text-gray-500 mt-2">Showing 5 of {parsedData.length} rows</p>
           </section>
         )}

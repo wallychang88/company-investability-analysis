@@ -3,16 +3,6 @@ import Papa from "papaparse";
 
 /**
  * VC Investability Analysis Tool – front‑end
- * ------------------------------------------------------------------
- * This is a streamlined version with:
- *   • Keeps HEADER_ROW_INDEX = 4 (comment corrected)
- *   • Uses Papa's auto‑delimiter detection (more robust)
- *   • Streams NDJSON from the back‑end
- *   • FormData upload instead of JSON (memory‑safe on BE)
- *   • Rounds float scores when binning → accurate histogram
- *   • Safari ≤17 fallback for ReadableStream
- *   • Simplified UI with minimized toast notifications
- */
 
 /* ─────────────────────────── Constants ─────────────────────────── */
 const HEADER_ROW_INDEX = 4; // Header row is index 4 (5‑th human row)
@@ -322,8 +312,6 @@ export default function VCAnalysisTool() {
       xhr.send(body);
     });
 
-  /* ─────────── Merge payload from server ─────────── */
-  /* Add this to your handlePayload function */
 /* ─────────── Merge payload from server ─────────── */
 const handlePayload = (data) => {
   if (!data) return;
@@ -486,7 +474,6 @@ const downloadCSV = () => {
     </div>
   );
 
-  /* Top 5 table with enhanced display */
   /* Top 5 table with enhanced display */
 const TopTable = () => {
   // Get matched company data (combines results with original data)

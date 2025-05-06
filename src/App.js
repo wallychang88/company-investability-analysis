@@ -36,7 +36,7 @@ export default function VCAnalysisTool() {
   • Has between 80 and 300 employees
   • Are based in the US, UK, Canada, or Israel
   • Have raised in total less than $150 million
-  • Are not public, public sub, or private sub
+  • Ownership is private, venture capital, private equity, or seed
   • provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
   • have a clear, defensible moat (e.g., proprietary data or network effects)`
   );
@@ -679,8 +679,10 @@ const TopTable = () => {
                 {parsedData.slice(0, 5).map((row, idx) => (
                   <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
                     {headers.map((h) => (
-                      <td key={h} className="px-4 py-3 whitespace-nowrap text-gray-700">
-                        {row[h]}
+                      <td key={h} className="px-4 py-3 whitespace-normal text-gray-700 max-w-xs truncate">
+                        {row[h] && typeof row[h] === 'string' && row[h].length > 100 
+                          ? `${row[h].substring(0, 100)}...` 
+                          : row[h]}
                       </td>
                     ))}
                   </tr>

@@ -64,33 +64,74 @@ def score_batch(
     """Calls the chat model on a slice of the dataframe with token efficiency."""
     print(f"Scoring batch of {len(df_slice)} companies")
     
+    # Add helper function to match columns more flexibly
+    def find_best_column_match(df, col_name):
+        """Find the best match for a column name in the DataFrame"""
+        if not col_name:
+            return None
+            
+        # 1. Direct match
+        if col_name in df.columns:
+            return col_name
+            
+        # 2. Case-insensitive match
+        for col in df.columns:
+            if col.lower() == col_name.lower():
+                return col
+                
+        # 3. Partial match - column contains the name or vice versa
+        for col in df.columns:
+            if col_name.lower() in col.lower() or col.lower() in col_name.lower():
+                return col
+                
+        return None
+    
+    # Print column mapping with improved matching
+    print("Improved column mapping:")
+    improved_map = {}
+    for key, value in column_map.items():
+        matched_col = find_best_column_match(df_slice, value)
+        if matched_col:
+            print(f"  {key} -> {value} -> MATCHED as {matched_col}")
+            improved_map[key] = matched_col
+        else:
+            print(f"  {key} -> {value} -> NOT FOUND")
+            improved_map[key] = value  # Keep original if no match
+            
+    # Use the improved map for the rest of the function
+    column_map = improved_map
+    
     system_prompt = build_system_prompt(criteria)
 
     # Prepare company data with mandatory and optional columns when mapped
     batch_content = ""
     company_names = []
     
-    for _, row in enumerate(df_slice.iterrows()):
+    for idx, (_, row) in enumerate(df_slice.iterrows()):
+        print(f"Processing row {idx+1}")
+        
         # Get company name (from description field or designated company_name field)
         desc_col = column_map.get("description", "")
         name_col = column_map.get("company_name", "")
             
         # Safe row access
         company_name = ""
-        if name_col and name_col in row[1]:
-            company_name = row[1][name_col]
-        if not company_name and desc_col and desc_col in row[1]:
-            company_name = row[1][desc_col]
+        if name_col and name_col in row:
+            company_name = row[name_col]
+        if not company_name and desc_col and desc_col in row:
+            company_name = row[desc_col]
+            
+        print(f"Using company name: '{company_name}'")
         
         company_names.append(company_name)  # Store exact name for later matching
         
         # Get description without truncation
-        description = row[1][desc_col] if desc_col in row[1] else ''
+        description = row[desc_col] if desc_col in row else ''
         
         # Start with mandatory fields - more concise format
         company_data = [f"Company: {company_name}"]
         
-        # Get column references
+        # Add mandatory fields (without truncating description)
         emp_col = column_map.get('employee_count', '')
         ind_col = column_map.get('industries', '')
         spec_col = column_map.get('specialties', '')
@@ -102,19 +143,19 @@ def score_batch(
         latest_raised_col = column_map.get('latest_raised', '')
         recent_investment_col = column_map.get('date_of_most_recent_investment', '')
         
-        # Safe data access
+        # Safe data access with existence check for each column
         fields = {
-            "Employee Count": row[1][emp_col] if emp_col in row[1] else '',
+            "Employee Count": row[emp_col] if emp_col in row else '',
             "Description": description,
-            "Industries": truncate_text(row[1][ind_col] if ind_col in row[1] else '', 200),
-            "Specialties": truncate_text(row[1][spec_col] if spec_col in row[1] else '', 200),
-            "Products/Services": truncate_text(row[1][prod_col] if prod_col in row[1] else '', 200),
-            "End Markets": truncate_text(row[1][end_col] if end_col in row[1] else '', 200),
-            "Country": row[1][country_col] if country_col in row[1] else '',
-            "Ownership": row[1][ownership_col] if ownership_col in row[1] else '',
-            "Total Raised": row[1][total_raised_col] if total_raised_col in row[1] else '',
-            "Latest Raised": row[1][latest_raised_col] if latest_raised_col in row[1] else '',
-            "Date of Most Recent Investment": row[1][recent_investment_col] if recent_investment_col in row[1] else ''
+            "Industries": truncate_text(row[ind_col] if ind_col in row else '', 200),
+            "Specialties": truncate_text(row[spec_col] if spec_col in row else '', 200),
+            "Products/Services": truncate_text(row[prod_col] if prod_col in row else '', 200),
+            "End Markets": truncate_text(row[end_col] if end_col in row else '', 200),
+            "Country": row[country_col] if country_col in row else '',
+            "Ownership": row[ownership_col] if ownership_col in row else '',
+            "Total Raised": row[total_raised_col] if total_raised_col in row else '',
+            "Latest Raised": row[latest_raised_col] if latest_raised_col in row else '',
+            "Date of Most Recent Investment": row[recent_investment_col] if recent_investment_col in row else ''
         }
         
         # Add each field if it has content
@@ -124,21 +165,31 @@ def score_batch(
         
         # Add optional fields if they're mapped and have content
         field_1_col = column_map.get("field_1", "")
-        if field_1_col and field_1_col in row[1] and row[1][field_1_col]:
-            company_data.append(f"Field 1: {row[1][field_1_col]}")
+        if field_1_col and field_1_col in row and row[field_1_col]:
+            company_data.append(f"Field 1: {row[field_1_col]}")
             
         field_2_col = column_map.get("field_2", "")
-        if field_2_col and field_2_col in row[1] and row[1][field_2_col]:
-            company_data.append(f"Field 2: {row[1][field_2_col]}")
+        if field_2_col and field_2_col in row and row[field_2_col]:
+            company_data.append(f"Field 2: {row[field_2_col]}")
             
         field_3_col = column_map.get("field_3", "")
-        if field_3_col and field_3_col in row[1] and row[1][field_3_col]:
-            company_data.append(f"Field 3: {row[1][field_3_col]}")
+        if field_3_col and field_3_col in row and row[field_3_col]:
+            company_data.append(f"Field 3: {row[field_3_col]}")
         
         # Join all company data and add to batch
         company_text = "\n".join(company_data) + "\n\n"
         batch_content += company_text
         
+        print(f"Added {len(company_data)} data fields for this company")
+        
+    print(f"Final batch_content length: {len(batch_content)}")
+    print(f"Total companies processed: {len(company_names)}")
+
+    # If batch content is empty, return error results
+    if not batch_content.strip():
+        print("ERROR: Empty batch content. Returning error results.")
+        return [{"company_name": name, "investability_score": -1} for name in company_names]
+
     # Estimate token count
     tokens_per_char = 0.25  # Rough estimate: 4 chars per token on average
     estimated_tokens = int(len(batch_content) * tokens_per_char)
@@ -177,6 +228,7 @@ def score_batch(
         print(f"OpenAI API call completed in {elapsed:.2f} seconds")
         
         response_text = completion.choices[0].message.content
+        print(f"Raw API response first 200 chars: {response_text[:200]}...")
         
         # Parse the JSON response
         response_data = json.loads(response_text)
@@ -186,7 +238,7 @@ def score_batch(
         
         # Verify we got correct data
         if not rows:
-            print(f"WARNING: No rows found in response")
+            print(f"WARNING: No rows found in response. Returning error results.")
             # Return companies with -1 scores instead of fallback scoring
             return [{"company_name": name, "investability_score": -1} for name in company_names]
             
@@ -228,6 +280,8 @@ def score_batch(
         return [{"company_name": name, "investability_score": -1} for name in company_names]
     except Exception as e:
         print(f"Error in score_batch: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
         
         # Return companies with -1 scores instead of fallback scoring
         return [{"company_name": name, "investability_score": -1} for name in company_names]
@@ -239,14 +293,13 @@ def stream_analysis(
     processed = 0
     total_rows = 0
     
-    print("==== DETAILED DEBUG STREAM ANALYSIS ====")
-    print("Starting stream analysis with extensive debugging")
+    print("Starting stream analysis")
     
     try:
         # Create a temporary clean copy of the file to avoid metadata/encoding issues
         print("Creating clean copy of the uploaded file...")
         
-        # Read the file content and get basic info
+        # Read the file content
         csv_content = csv_stream.read()
         print(f"File size: {len(csv_content)} bytes")
         print(f"First 100 bytes (hex): {csv_content[:100].hex()}")
@@ -280,15 +333,6 @@ def stream_analysis(
                 csv_content = csv_content[4:]
                 print("Removed UTF-32 LE BOM")
         
-        # Check for unusual characters in the first few lines
-        try:
-            first_few_lines = csv_content[:1000].decode('utf-8').split('\n')[:10]
-            print("First few lines of the file:")
-            for i, line in enumerate(first_few_lines):
-                print(f"Line {i}: {repr(line)}")
-        except Exception as e:
-            print(f"Error decoding first few lines: {e}")
-        
         # Write cleaned content to the new buffer
         clean_csv.write(csv_content)
         clean_csv.seek(0)  # Reset pointer to beginning of file
@@ -303,6 +347,20 @@ def stream_analysis(
                 clean_csv.seek(0)
                 all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding=encoding)
                 print(f"Successfully read CSV with encoding: {encoding}")
+                
+                # Apply column name normalization
+                print("Original column names:", list(all_data.columns))
+                all_data.columns = [
+                    col.strip()
+                       .replace('\ufeff', '')
+                       .replace('\r', '')
+                       .replace('\n', '')
+                       .replace('\t', ' ')
+                       .replace('\xa0', ' ')  # Non-breaking space
+                    for col in all_data.columns
+                ]
+                print("Normalized column names:", list(all_data.columns))
+                
                 break
             except Exception as e:
                 print(f"Failed with encoding {encoding}: {e}")
@@ -320,10 +378,24 @@ def stream_analysis(
             clean_csv.seek(0)
             all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding=detected_encoding)
             print(f"Read CSV with detected encoding: {detected_encoding}")
+            
+            # Apply column name normalization here too
+            print("Original column names (chardet):", list(all_data.columns))
+            all_data.columns = [
+                col.strip()
+                   .replace('\ufeff', '')
+                   .replace('\r', '')
+                   .replace('\n', '')
+                   .replace('\t', ' ')
+                   .replace('\xa0', ' ')  # Non-breaking space
+                for col in all_data.columns
+            ]
+            print("Normalized column names (chardet):", list(all_data.columns))
         
-        # Print basic DataFrame info
-        print(f"DataFrame info: {all_data.shape[0]} rows, {all_data.shape[1]} columns")
-        print("Column names:", list(all_data.columns))
+        # Print detailed column info
+        print("Column names with detailed inspection:")
+        for i, col in enumerate(all_data.columns):
+            print(f"Column {i}: '{col}' - Hex: {' '.join(hex(ord(c))[2:] for c in col)}")
         
         # Fix any potential line ending issues - using updated methods instead of applymap
         print("Fixing line endings...")
@@ -342,32 +414,6 @@ def stream_analysis(
         all_data = all_data.fillna("")
         print(f"Successfully processed file. Found {total_rows} total rows in CSV")
         
-        # Debug the first few rows of data
-        print("First 2 rows of data:")
-        for i in range(min(2, len(all_data))):
-            row_data = all_data.iloc[i]
-            print(f"Row {i}:")
-            for col in all_data.columns:
-                value = row_data[col]
-                if isinstance(value, str) and len(value) > 50:
-                    print(f"  {col}: {value[:50]}... (truncated)")
-                else:
-                    print(f"  {col}: {value}")
-        
-        # Debug column mapping
-        print("Column mapping debug:")
-        for key, value in column_map.items():
-            print(f"  {key} -> {value}")
-            if value and value in all_data.columns:
-                print(f"    Column exists in DataFrame")
-                sample = all_data[value].iloc[0] if not all_data.empty else "N/A"
-                if isinstance(sample, str) and len(sample) > 50:
-                    print(f"    Sample: {sample[:50]}... (truncated)")
-                else:
-                    print(f"    Sample: {sample}")
-            else:
-                print(f"    WARNING: Column not found in DataFrame")
-        
         # Process in chunks
         chunk_size = 1000
         for chunk_start in range(0, total_rows, chunk_size):
@@ -383,24 +429,7 @@ def stream_analysis(
                 print(f"Processing batch: rows {start+1}-{end} (batch size: {batch_size})")
 
                 try:
-                    # Debug batch data before sending to OpenAI
-                    print(f"Sending batch to OpenAI with {batch_size} rows:")
-                    for i in range(min(1, batch_size)):
-                        row_data = batch.iloc[i]
-                        print(f"Sample row fields:")
-                        for field_key in ['description', 'employee_count', 'industries']:
-                            field_col = column_map.get(field_key, '')
-                            if field_col and field_col in row_data:
-                                value = row_data[field_col]
-                                if isinstance(value, str) and len(value) > 50:
-                                    print(f"  {field_key}: {value[:50]}... (truncated)")
-                                else:
-                                    print(f"  {field_key}: {value}")
-                            else:
-                                print(f"  {field_key}: NOT FOUND")
-                    
                     # Get company scores from OpenAI
-                    print("Calling score_batch function...")
                     rows = score_batch(batch, column_map, criteria)
                     
                     # Create response payload with rows
@@ -408,13 +437,6 @@ def stream_analysis(
                         "progress": processed + batch_size,
                         "result": rows
                     }
-                    
-                    # Debug API response
-                    print(f"OpenAI API returned {len(rows)} results")
-                    if len(rows) > 0:
-                        print(f"First result: {rows[0]}")
-                    else:
-                        print("WARNING: No rows returned from OpenAI API")
                     
                     processed_pct = round((processed + batch_size) / total_rows * 100)
                     print(f"Progress: {processed + batch_size}/{total_rows} ({processed_pct}%)")

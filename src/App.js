@@ -711,8 +711,7 @@ const TopTable = () => {
 
         {/* 4. Criteria & weights */}
         <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white space-y-6">
-          <h2 className="text-xl font-semibold text-blue-800">Define Investing Criteria</h2>
-          // Modify the textarea section in the "Criteria & weights" component
+        <h2 className="text-xl font-semibold text-blue-800">Define Investing Criteria</h2>
         <textarea
           value={investCriteria}
           onChange={(e) => setInvestCriteria(e.target.value)}
@@ -737,27 +736,27 @@ const TopTable = () => {
           className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-200"
           placeholder="Enter your investment criteria. Press Enter to add a new bullet point."
         />
-          <p className="text-xs text-indigo-600">Use bullet points (•) to define each criterion.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {criteriaWeights.map((it) => (
-              <div key={it.id} className="bg-gray-50 p-4 rounded-lg shadow-sm">
-                <label className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700 truncate" title={it.label}>{it.label}</span>
-                  <span className="text-sm font-bold text-indigo-600">{it.weight.toFixed(1)}×</span>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value={it.weight}
-                  onChange={(e) => updateWeight(it.id, parseFloat(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-            ))}
-          </div>
-        </section>
+        <p className="text-xs text-indigo-600">Use bullet points (•) to define each criterion.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {criteriaWeights.map((it) => (
+            <div key={it.id} className="bg-gray-50 p-4 rounded-lg shadow-sm">
+              <label className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700 truncate" title={it.label}>{it.label}</span>
+                <span className="text-sm font-bold text-indigo-600">{it.weight.toFixed(1)}×</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                value={it.weight}
+                onChange={(e) => updateWeight(it.id, parseFloat(e.target.value))}
+                className="w-full"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
 
         {/* Analyze */}
         <div className="text-center mb-8">

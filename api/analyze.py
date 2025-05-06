@@ -62,6 +62,13 @@ def score_batch(
 ) -> List[Dict]:
     """Calls the chat model on a slice of the dataframe with token efficiency."""
     print(f"Scoring batch of {len(df_slice)} companies")
+    print(f"Column map received: {column_map}")
+    
+    # Debug first row of data
+    if len(df_slice) > 0:
+        print(f"First row keys: {list(df_slice.iloc[0].keys())}")
+        print(f"First row values: {list(df_slice.iloc[0].values())}")
+    
     system_prompt = build_system_prompt(criteria)
 
     # Prepare company data with mandatory and optional columns when mapped
@@ -71,40 +78,63 @@ def score_batch(
     # Store original company names to ensure exact matching later
     company_names = []
     
-    # Reduce batch size if needed for large descriptions
-    batch_size = len(df_slice)
+    # Debug column mapping and dataframe columns
+    for col_key, col_name in column_map.items():
+        print(f"Mapping '{col_key}' to '{col_name}'")
+        if col_name and col_name in df_slice.columns:
+            print(f"  Column '{col_name}' exists in dataframe")
+            # Sample first few values
+            sample = df_slice[col_name].head(2).tolist()
+            print(f"  Sample values: {sample}")
+        else:
+            print(f"  WARNING: Column '{col_name}' NOT FOUND in dataframe")
     
-    # Warn if batch size seems large for potential token issues
-    total_desc_len = 0
-    for _, row in df_slice.iterrows():
-        desc = row.get(column_map.get('description', ''), '')
-        total_desc_len += len(desc)
-    
-    avg_desc_len = total_desc_len / batch_size if batch_size > 0 else 0
-    if avg_desc_len > 1000 and batch_size > 2:
-        print(f"WARNING: Average description length ({avg_desc_len:.0f} chars) is high. Consider reducing batch size.")
-    
-    for _, row in df_slice.iterrows():
+    for idx, (_, row) in enumerate(df_slice.iterrows()):
+        # Debug row processing
+        print(f"Processing row {idx+1}")
+        
         # Get company name (from description field or designated company_name field)
-        company_name = row.get(column_map.get("company_name", ""), "") or row.get(column_map.get("description", ""), "")
+        desc_col = column_map.get("description", "")
+        name_col = column_map.get("company_name", "")
+        
+        # Debug column values
+        if desc_col:
+            print(f"Description column: '{desc_col}', Value: '{row.get(desc_col, 'NOT FOUND')}'")
+        if name_col:
+            print(f"Company name column: '{name_col}', Value: '{row.get(name_col, 'NOT FOUND')}'")
+            
+        company_name = row.get(name_col, "") or row.get(desc_col, "")
+        print(f"Using company name: '{company_name}'")
+        
         companies.append({"name": company_name})
         company_names.append(company_name)  # Store exact name for later matching
         
         # Get description without truncation
-        description = row.get(column_map.get('description', ''), '')
+        description = row.get(desc_col, '')
         
         # Start with mandatory fields - more concise format
         company_data = [f"Company: {company_name}"]
         
         # Add mandatory fields (without truncating description)
+        emp_col = column_map.get('employee_count', '')
+        ind_col = column_map.get('industries', '')
+        spec_col = column_map.get('specialties', '')
+        prod_col = column_map.get('products_services', '')
+        end_col = column_map.get('end_markets', '')
+        
         fields = {
-            "Employee Count": row.get(column_map.get('employee_count', ''), ''),
+            "Employee Count": row.get(emp_col, ''),
             "Description": description,
-            "Industries": truncate_text(row.get(column_map.get('industries', ''), ''), 200),
-            "Specialties": truncate_text(row.get(column_map.get('specialties', ''), ''), 200),
-            "Products/Services": truncate_text(row.get(column_map.get('products_services', ''), ''), 200),
-            "End Markets": truncate_text(row.get(column_map.get('end_markets', ''), ''), 200)
+            "Industries": truncate_text(row.get(ind_col, ''), 200),
+            "Specialties": truncate_text(row.get(spec_col, ''), 200),
+            "Products/Services": truncate_text(row.get(prod_col, ''), 200),
+            "End Markets": truncate_text(row.get(end_col, ''), 200)
         }
+        
+        # Debug field values
+        print(f"Field values for company '{company_name}':")
+        for field_name, field_value in fields.items():
+            print(f"  {field_name}: '{field_value[:20]}{'...' if len(field_value) > 20 else ''}'")
         
         # Add each field if it has content
         for label, value in fields.items():
@@ -112,18 +142,31 @@ def score_batch(
                 company_data.append(f"{label}: {value}")
         
         # Add optional fields if they're mapped and have content
-        if column_map.get("country") and column_map.get("country") in row and row[column_map.get("country")]:
-            company_data.append(f"Country: {row[column_map.get('country')]}")
+        country_col = column_map.get("country", "")
+        if country_col and country_col in row and row[country_col]:
+            company_data.append(f"Country: {row[country_col]}")
             
-        if column_map.get("ownership") and column_map.get("ownership") in row and row[column_map.get("ownership")]:
-            company_data.append(f"Ownership: {row[column_map.get('ownership')]}")
+        ownership_col = column_map.get("ownership", "")
+        if ownership_col and ownership_col in row and row[ownership_col]:
+            company_data.append(f"Ownership: {row[ownership_col]}")
             
-        if column_map.get("founding_year") and column_map.get("founding_year") in row and row[column_map.get("founding_year")]:
-            company_data.append(f"Founding Year: {row[column_map.get('founding_year')]}")
+        founding_col = column_map.get("founding_year", "")
+        if founding_col and founding_col in row and row[founding_col]:
+            company_data.append(f"Founding Year: {row[founding_col]}")
+            
+        raised_col = column_map.get("total_raised", "")
+        if raised_col and raised_col in row and row[raised_col]:
+            company_data.append(f"Total Raised: {row[raised_col]}")
         
         # Join all company data and add to batch
         company_text = "\n".join(company_data) + "\n\n"
         batch_content += company_text
+        
+        print(f"Added {len(company_data)} data fields for this company")
+        
+    print(f"Final batch_content length: {len(batch_content)}")
+    print(f"batch_content first 200 chars: {batch_content[:200]}")
+    print(f"Total companies processed: {len(company_names)}")
 
     # Estimate token count
     tokens_per_char = 0.25  # Rough estimate: 4 chars per token on average
@@ -179,9 +222,8 @@ def score_batch(
         # Verify we got correct data
         if not rows:
             print(f"WARNING: No rows found in response. Full response: {response_text}")
-            # Fall back to generating scores ourselves
-            print("Using fallback scoring due to empty rows")
-            return [{"company_name": name, "investability_score": 5} for name in company_names]
+            # Return companies with -1 scores instead of fallback scoring
+            return [{"company_name": name, "investability_score": -1} for name in company_names]
             
         # Validate and fix each row
         valid_rows = []
@@ -197,21 +239,21 @@ def score_batch(
             
             # Ensure score is a valid integer between 0-10
             try:
-                score = int(row.get("investability_score", 5))
+                score = int(row.get("investability_score", -1))
                 row["investability_score"] = max(0, min(10, score))
             except (ValueError, TypeError):
-                print(f"Invalid score in row {i}, using default: 5")
-                row["investability_score"] = 5
+                print(f"Invalid score in row {i}, using -1")
+                row["investability_score"] = -1
                 
             valid_rows.append(row)
         
-        # If we have fewer rows than companies, add missing companies with default scores
+        # If we have fewer rows than companies, add missing companies with -1 scores
         if len(valid_rows) < len(company_names):
             processed_names = [row["company_name"] for row in valid_rows]
             for i, name in enumerate(company_names):
                 if name not in processed_names:
                     print(f"Adding missing company: {name}")
-                    valid_rows.append({"company_name": name, "investability_score": 5})
+                    valid_rows.append({"company_name": name, "investability_score": -1})
         
         print(f"Returning {len(valid_rows)} valid company scores")
         
@@ -221,15 +263,15 @@ def score_batch(
         print(f"JSON parse error: {e}")
         print(f"Response was: {response_text}")
         
-        # Return fallback scores using exact company names
-        print("Using fallback scoring due to JSON parse error")
-        return [{"company_name": name, "investability_score": 5} for name in company_names]
+        # Return companies with -1 scores instead of fallback scoring
+        print("Using -1 scores due to JSON parse error")
+        return [{"company_name": name, "investability_score": -1} for name in company_names]
     except Exception as e:
         print(f"Error in score_batch: {type(e).__name__}: {str(e)}")
         
-        # Return fallback scores using exact company names
-        print("Using fallback scoring due to exception")
-        return [{"company_name": name, "investability_score": 5} for name in company_names]
+        # Return companies with -1 scores instead of fallback scoring
+        print("Using -1 scores due to exception")
+        return [{"company_name": name, "investability_score": -1} for name in company_names]
 
 def stream_analysis(
     csv_stream, column_map: Dict[str, str], criteria: str

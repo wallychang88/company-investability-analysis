@@ -1,20 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Papa from "papaparse";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 
 /**
  * VC Investability Analysis Tool – front‑end
  * ------------------------------------------------------------------
- * This is a **full rebuild** of the original front‑end preserving all
- * UI/UX features while fixing the runtime bugs we identified:
+ * This is a streamlined version with:
  *   • Keeps HEADER_ROW_INDEX = 4 (comment corrected)
  *   • Uses Papa's auto‑delimiter detection (more robust)
- *   • Streams NDJSON from the back‑end (matching /api/analyze v2)
+ *   • Streams NDJSON from the back‑end
  *   • FormData upload instead of JSON (memory‑safe on BE)
  *   • Rounds float scores when binning → accurate histogram
- *   • Swap window.alert → react‑toastify non‑blocking toasts
  *   • Safari ≤17 fallback for ReadableStream
+ *   • Simplified UI with minimized toast notifications
  */
 
 /* ─────────────────────────── Constants ─────────────────────────── */
@@ -49,7 +46,7 @@ export default function VCAnalysisTool() {
   const [progress, setProgress] = useState(0);
   const [resultCount, setResultCount] = useState(0);
   const [results, setResults] = useState([]);
-  const [lastError, setLastError] = useState(null); // Added to track errors
+  const [lastError, setLastError] = useState(null); // For error state
 
   const abortRef = useRef(null);
 
@@ -82,13 +79,13 @@ export default function VCAnalysisTool() {
       complete: ({ data }) => {
         // Check if there's enough rows for the header
         if (data.length <= HEADER_ROW_INDEX) {
-          toast.error(`File needs at least ${HEADER_ROW_INDEX + 1} rows`);
+          setLastError(`File needs at least ${HEADER_ROW_INDEX + 1} rows`);
           return;
         }
         
         const hdr = data[HEADER_ROW_INDEX];
         if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
-          toast.error("Could not detect headers in file");
+          setLastError("Could not detect headers in file");
           return;
         }
         
@@ -125,9 +122,9 @@ export default function VCAnalysisTool() {
           founding_year: find("founding year") || find("founded") || find("year founded"),
         });
         
-        toast.success(`Loaded ${rows.length} companies`);
+        setLastError(null);
       },
-      error: (err) => toast.error(`CSV parse error: ${err.message}`),
+      error: (err) => setLastError(`CSV parse error: ${err.message}`),
     });
   };
 
@@ -154,7 +151,7 @@ export default function VCAnalysisTool() {
     setLastError(null);
     
     if (!file) {
-      toast.warn("Upload a file first");
+      setLastError("Upload a file first");
       return;
     }
 
@@ -162,13 +159,13 @@ export default function VCAnalysisTool() {
     const missing = REQUIRED_COLS.filter((c) => !columnMap[c]);
     if (missing.length) {
       const missingNames = missing.map(c => c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()));
-      toast.error(`Please map these required columns: ${missingNames.join(", ")}`);
+      setLastError(`Please map these required columns: ${missingNames.join(", ")}`);
       return;
     }
 
     // Check if we have any rows to process
     if (parsedData.length === 0) {
-      toast.error("No valid data rows found to process");
+      setLastError("No valid data rows found to process");
       return;
     }
 
@@ -179,7 +176,7 @@ export default function VCAnalysisTool() {
       .filter((l) => l.startsWith("•"));
     
     if (bullets.length === 0) {
-      toast.error("Please add at least one bullet point (•) criterion");
+      setLastError("Please add at least one bullet point (•) criterion");
       return;
     }
 
@@ -190,7 +187,13 @@ export default function VCAnalysisTool() {
     setResults([]);
 
     // Abort controller for multiple runs
-    abortRef.current?.abort();
+    if (abortRef.current) {
+      try {
+        abortRef.current.abort();
+      } catch (e) {
+        console.warn("Error aborting previous request:", e);
+      }
+    }
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -210,14 +213,12 @@ export default function VCAnalysisTool() {
     }
 
     try {
-      // Log what we're sending
+      // Log what we're sending (for debugging only)
       console.log("Sending request with:", {
         mappings: columnMap,
         criteria: investCriteria.split('\n').filter(l => l.trim()),
         weights: criteriaWeights
       });
-      
-      toast.info("Connecting to API...");
       
       const res = await fetch("/api/analyze", { 
         method: "POST", 
@@ -230,21 +231,16 @@ export default function VCAnalysisTool() {
         throw new Error(`API error (${res.status}): ${errorText || res.statusText}`);
       }
 
-      toast.success("Processing started");
-
       if (res.body && typeof res.body.getReader === 'function') {
         await readStream(res.body.getReader());
       } else {
         // Safari ≤17 fallback
         await readStreamXHR(fd, controller.signal);
       }
-      
-      toast.success(`Analysis complete! Processed ${resultCount} companies.`);
     } catch (err) {
       if (err.name !== "AbortError") {
         console.error("Analysis error:", err);
         setLastError(err.message || "Unknown error");
-        toast.error(`Error: ${err.message || "Connection failed"}`);
       }
     } finally {
       setIsProcessing(false);
@@ -329,7 +325,6 @@ export default function VCAnalysisTool() {
     if (!data) return;
     
     if (data.error) {
-      toast.error(data.error);
       setLastError(data.error);
       return;
     }
@@ -342,11 +337,6 @@ export default function VCAnalysisTool() {
       setResultCount(data.progress);
       const progressPercent = Math.round((data.progress / parsedData.length) * 100);
       setProgress(progressPercent);
-      
-      // Update progress toast every 25%
-      if (progressPercent % 25 === 0 && progressPercent > 0) {
-        toast.info(`Processing: ${progressPercent}% complete`);
-      }
     }
   };
 
@@ -358,7 +348,7 @@ export default function VCAnalysisTool() {
     const companyField = columnMap.company_name || columnMap.description;
     
     if (!companyField) {
-      toast.error("Could not determine company name field");
+      setLastError("Could not determine company name field");
       return;
     }
     
@@ -434,40 +424,81 @@ export default function VCAnalysisTool() {
     </div>
   );
 
-  /* Top 5 table */
-  const TopTable = () => (
-    <div>
-      <h3 className="font-medium text-gray-700 mb-4">Top Companies by Investability Score</h3>
-      <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Company</th>
-              <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Score</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {results.length === 0 ? (
+  /* Top 5 table with enhanced display */
+  const TopTable = () => {
+    // Get matched company data (combines results with original data)
+    const topCompanies = useMemo(() => {
+      // Early return if no results
+      if (results.length === 0) return [];
+      
+      // Get top 5 scores
+      return results
+        .slice()
+        .sort((a, b) => b.investability_score - a.investability_score)
+        .slice(0, 5)
+        .map(result => {
+          // Find the original company data from parsedData
+          const companyName = result.company_name;
+          const originalData = parsedData.find(row => 
+            (columnMap.description && row[columnMap.description] === companyName) || 
+            (columnMap.company_name && row[columnMap.company_name] === companyName)
+          ) || {};
+          
+          // Get founding year and employee count from mapped columns
+          const foundingYear = columnMap.founding_year ? originalData[columnMap.founding_year] : 'N/A';
+          const employeeCount = columnMap.employee_count ? originalData[columnMap.employee_count] : 'N/A';
+          
+          return {
+            name: companyName,
+            foundingYear,
+            employeeCount,
+            score: result.investability_score
+          };
+        });
+    }, [results, parsedData, columnMap]);
+
+    return (
+      <div>
+        <h3 className="font-medium text-gray-700 mb-4">Top Companies by Investability Score</h3>
+        <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
               <tr>
-                <td colSpan="2" className="px-6 py-4 text-center text-gray-500">No results yet</td>
+                <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Founded</th>
+                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Employees</th>
+                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Score</th>
               </tr>
-            ) : (
-              results
-                .slice()
-                .sort((a, b) => b.investability_score - a.investability_score)
-                .slice(0, 5)
-                .map((r, idx) => (
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {topCompanies.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="px-6 py-4 text-center text-gray-500">No results yet</td>
+                </tr>
+              ) : (
+                topCompanies.map((company, idx) => (
                   <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-700">{r.company_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-bold">{r.investability_score}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{company.name}</td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.foundingYear}</td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.employeeCount}</td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700 font-bold">
+                      <span className={`inline-block px-3 py-1 rounded-full ${
+                        company.score >= 7 ? "bg-green-100 text-green-800" : 
+                        company.score >= 4 ? "bg-yellow-100 text-yellow-800" : 
+                        "bg-red-100 text-red-800"
+                      }`}>
+                        {company.score}
+                      </span>
+                    </td>
                   </tr>
                 ))
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   /* ─────────── Render ─────────── */
   return (
@@ -477,8 +508,17 @@ export default function VCAnalysisTool() {
         <header className="bg-white rounded-xl shadow-xl overflow-hidden mb-8">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-8 text-white text-center">
             <h1 className="text-3xl font-bold">VC Investability Analysis Tool</h1>
+            <p className="text-blue-100 mt-2">Analyze companies against your investment criteria</p>
           </div>
         </header>
+
+        {/* Error Display */}
+        {lastError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+            <p className="font-medium">Error:</p>
+            <p>{lastError}</p>
+          </div>
+        )}
 
         {/* 1. Upload */}
         <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-blue-50 space-y-4">
@@ -584,12 +624,6 @@ export default function VCAnalysisTool() {
           {!parsedData.length && file && (
             <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>
           )}
-          {lastError && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              <p className="font-medium">Last error:</p>
-              <p>{lastError}</p>
-            </div>
-          )}
         </div>
 
         {/* Progress */}
@@ -615,7 +649,6 @@ export default function VCAnalysisTool() {
               onClick={() => {
                 if (abortRef.current) {
                   abortRef.current.abort();
-                  toast.info("Processing cancelled");
                 }
               }}
               className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
@@ -641,8 +674,6 @@ export default function VCAnalysisTool() {
             </div>
           </section>
         )}
-
-        <ToastContainer position="bottom-right" />
       </div>
     </div>
   );

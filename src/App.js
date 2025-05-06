@@ -33,12 +33,12 @@ export default function VCAnalysisTool() {
   const [columnMap, setColumnMap] = useState({});
   const [investCriteria, setInvestCriteria] = useState(
   `We invest in enterprise SaaS, software enabled services and managed service/BPO companies that:
-  - have 80–300 employees
-  - Are based in the US, UK, Canada, or Israel
-  - Have raised in total less than $150 million
-  - Are not public, public sub, or private sub
-  - provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
-  - have a clear, defensible moat (e.g., proprietary data or network effects)`
+  • have 80–300 employees
+  • Are based in the US, UK, Canada, or Israel
+  • Have raised in total less than $150 million
+  • Are not public, public sub, or private sub
+  • provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
+  • have a clear, defensible moat (e.g., proprietary data or network effects)`
   );
   const [criteriaWeights, setCriteriaWeights] = useState([]); // [{id,label,weight}]
   const [isProcessing, setIsProcessing] = useState(false);
@@ -684,7 +684,7 @@ const TopTable = () => {
           <textarea
             value={investCriteria}
             onChange={(e) => setInvestCriteria(e.target.value)}
-            rows={6}
+            rows={8}
             className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-200"
             placeholder="Enter your investment criteria. Use bullet points (•) to define each criterion."
           />

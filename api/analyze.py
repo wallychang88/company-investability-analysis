@@ -25,7 +25,7 @@ CORS(app, origins=["https://company-investability-score.vercel.app", "http://loc
 MODEL_NAME = "gpt-4o-mini"  
 MAX_TOKENS = 1024
 TEMPERATURE = 0.2
-BATCH_SIZE = 5  # rows / OpenAI request
+BATCH_SIZE = 2  # rows / OpenAI request
 TIMEOUT = 30  # seconds
 
 # Initialize OpenAI client with error handling

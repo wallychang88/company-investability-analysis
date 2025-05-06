@@ -712,13 +712,31 @@ const TopTable = () => {
         {/* 4. Criteria & weights */}
         <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white space-y-6">
           <h2 className="text-xl font-semibold text-blue-800">Define Investing Criteria</h2>
-          <textarea
-            value={investCriteria}
-            onChange={(e) => setInvestCriteria(e.target.value)}
-            rows={8}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-200"
-            placeholder="Enter your investment criteria. Use bullet points (•) to define each criterion."
-          />
+          // Modify the textarea section in the "Criteria & weights" component
+        <textarea
+          value={investCriteria}
+          onChange={(e) => setInvestCriteria(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const cursorPosition = e.target.selectionStart;
+              const textBeforeCursor = investCriteria.substring(0, cursorPosition);
+              const textAfterCursor = investCriteria.substring(cursorPosition);
+              
+              // Add a new line with bullet point
+              setInvestCriteria(textBeforeCursor + '\n• ' + textAfterCursor);
+              
+              // Set cursor position after the bullet point (delayed to ensure state is updated)
+              setTimeout(() => {
+                e.target.selectionStart = cursorPosition + 3; // Position after "• "
+                e.target.selectionEnd = cursorPosition + 3;
+              }, 0);
+            }
+          }}
+          rows={10}
+          className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-200"
+          placeholder="Enter your investment criteria. Press Enter to add a new bullet point."
+        />
           <p className="text-xs text-indigo-600">Use bullet points (•) to define each criterion.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {criteriaWeights.map((it) => (

@@ -1,14 +1,5 @@
 # api/analyze.py
-"""Back‑end endpoint for generating investability scores in a memory‑safe, streamable
-   fashion.  Tweaks in this build:
-   • Model bumped to **gpt‑4o‑mini**
-   • max_tokens lowered to 1024 (fits the model's 12k context window comfortably)
-   • Global timeout of 30 s on every OpenAI call
-   • Robust progress accounting even when a batch errors
-   • Chunk‑reads the CSV so large uploads don't blow RAM
-   • CORS restricted to the production front‑end
-   • Response format updated to return {"rows":[{<csv row fields>, "investability_score":<0‑10>}, …]}
-"""
+
 from __future__ import annotations
 
 import json, os, time
@@ -24,7 +15,7 @@ from openai import OpenAI, APIError
 ###############################################################################
 
 app = Flask(__name__)
-CORS(app, origins=["https://company-investability-score.vercel.app"])  # prod only
+CORS(app, origins=["https://company-investability-score.vercel.app", "http://localhost:3000"])  # Allow local testing
 
 ###############################################################################
 # OpenAI client configuration
@@ -36,7 +27,12 @@ TEMPERATURE = 0.2
 BATCH_SIZE = 5  # rows / OpenAI request
 TIMEOUT = 30  # seconds
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), timeout=TIMEOUT)
+# Initialize OpenAI client with error handling
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    print("WARNING: OPENAI_API_KEY environment variable not set!")
+
+client = OpenAI(api_key=api_key, timeout=TIMEOUT)
 
 ###############################################################################
 # Helper functions
@@ -56,6 +52,7 @@ def score_batch(
     df_slice: pd.DataFrame, column_map: Dict[str, str], criteria: str
 ) -> List[Dict]:
     """Calls the chat model on a slice of the dataframe and returns just company names and scores."""
+    print(f"Scoring batch of {len(df_slice)} companies")
     system_prompt = build_system_prompt(criteria)
 
     # Prepare company data with mandatory and optional columns when mapped
@@ -104,89 +101,180 @@ def score_batch(
         company_data += "\n"
         batch_content += company_data
 
+    print(f"Prepared batch content ({len(batch_content)} chars) for OpenAI API")
+
     # Create the completion request
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": f"Companies to analyze:\n\n{batch_content}"}
     ]
 
-    completion = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=messages,
-        temperature=TEMPERATURE,
-        max_tokens=MAX_TOKENS,
-        response_format={"type": "json_object"}
-    )
-    
-    response_text = completion.choices[0].message.content
-    
     try:
+        print(f"Calling OpenAI API with model {MODEL_NAME}...")
+        start_time = time.time()
+        
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=TEMPERATURE,
+            max_tokens=MAX_TOKENS,
+            response_format={"type": "json_object"}
+        )
+        
+        elapsed = time.time() - start_time
+        print(f"OpenAI API call completed in {elapsed:.2f} seconds")
+        
+        response_text = completion.choices[0].message.content
+        
         # Parse the JSON response
         response_data = json.loads(response_text)
         
-        # Return the rows array directly or empty list if not present
-        return response_data.get("rows", [])
+        # Get rows and validate
+        rows = response_data.get("rows", [])
+        print(f"Received {len(rows)} company scores from OpenAI API")
+        
+        return rows
     except json.JSONDecodeError as e:
-        # Fallback if the model returns invalid JSON
         print(f"JSON parse error: {e}")
         print(f"Response was: {response_text}")
         
         # Attempt to create minimal valid scores as a fallback
+        print("Using fallback scoring due to JSON parse error")
         return [{"company_name": company["name"], "investability_score": 5} for company in companies]
+    except Exception as e:
+        print(f"Error in score_batch: {type(e).__name__}: {str(e)}")
+        raise  # Re-raise to be caught by stream_analysis
 
 def stream_analysis(
     csv_stream, column_map: Dict[str, str], criteria: str
 ) -> Generator[str, None, None]:
     """Yields NDJSON strings as each batch is processed."""
     processed = 0
+    total_rows = 0
+    
+    print("Starting stream analysis")
+    
+    try:
+        # Count rows first
+        print("Counting total rows in CSV...")
+        df_chunks = pd.read_csv(csv_stream, dtype=str, chunksize=1000)
+        chunks = list(df_chunks)
+        total_rows = sum(len(chunk) for chunk in chunks)
+        print(f"Found {total_rows} total rows in CSV")
+        
+        # Reset file pointer
+        csv_stream.seek(0)
+        
+        # Process in chunks
+        for chunk_idx, chunk in enumerate(pd.read_csv(csv_stream, dtype=str, chunksize=1000)):
+            chunk = chunk.fillna("")
+            num_rows = len(chunk)
+            print(f"Processing chunk {chunk_idx+1} with {num_rows} rows")
 
-    for chunk in pd.read_csv(csv_stream, dtype=str, chunksize=1000):
-        chunk = chunk.fillna("")
-        num_rows = len(chunk)
-
-        for start in range(0, num_rows, BATCH_SIZE):
-            end = min(start + BATCH_SIZE, num_rows)
-            batch = chunk.iloc[start:end]
-
-            try:
-                # Get just company names and scores
-                rows = score_batch(batch, column_map, criteria)
+            for start in range(0, num_rows, BATCH_SIZE):
+                end = min(start + BATCH_SIZE, num_rows)
+                batch = chunk.iloc[start:end]
+                batch_size = len(batch)
                 
-                # Create response payload with simplified rows
-                payload = {
-                    "progress": processed + len(batch),
-                    "result": rows  # Using 'result' to maintain compatibility with front-end
-                }
-            except APIError as e:
-                payload = {
-                    "progress": processed + len(batch),
-                    "error": f"OpenAI error: {e.__class__.__name__}: {e}",
-                }
-            except Exception as e:  # catch‑all so stream never dies
-                payload = {"progress": processed + len(batch), "error": str(e)}
+                print(f"Processing batch: rows {start+1}-{end} (batch size: {batch_size})")
 
-            processed += len(batch)
-            yield json.dumps(payload) + "\n"
+                try:
+                    # Get company scores from OpenAI
+                    rows = score_batch(batch, column_map, criteria)
+                    
+                    # Create response payload with rows
+                    payload = {
+                        "progress": processed + batch_size,
+                        "result": rows
+                    }
+                    
+                    processed_pct = round((processed + batch_size) / total_rows * 100)
+                    print(f"Progress: {processed + batch_size}/{total_rows} ({processed_pct}%)")
+                    
+                except APIError as e:
+                    print(f"OpenAI API error: {type(e).__name__}: {str(e)}")
+                    payload = {
+                        "progress": processed + batch_size,
+                        "error": f"OpenAI error: {e.__class__.__name__}: {e}",
+                    }
+                except Exception as e:
+                    print(f"Unexpected error: {type(e).__name__}: {str(e)}")
+                    payload = {
+                        "progress": processed + batch_size,
+                        "error": f"Error: {type(e).__name__}: {str(e)}",
+                    }
+
+                processed += batch_size
+                json_payload = json.dumps(payload)
+                print(f"Yielding payload with {len(rows) if 'rows' in locals() else 0} results")
+                
+                yield json_payload + "\n"
+    except Exception as e:
+        print(f"Stream analysis error: {type(e).__name__}: {str(e)}")
+        yield json.dumps({"error": f"Stream error: {str(e)}"}) + "\n"
 
 ###############################################################################
 # Flask route
 ###############################################################################
 
-
 @app.route("/api/analyze", methods=["POST"])
 def analyze_endpoint():
     """HTTP endpoint that streams NDJSON back to the front‑end."""
+    print("\n==== ANALYZE ENDPOINT CALLED ====")
+    print(f"Request from: {request.remote_addr}")
+    
+    # Debug OpenAI setup
+    api_key = os.getenv("OPENAI_API_KEY")
+    print(f"API KEY PRESENT: {'Yes' if api_key else 'No'}")
+    if not api_key:
+        error_msg = "OpenAI API key not set. Please set the OPENAI_API_KEY environment variable."
+        print(f"Error: {error_msg}")
+        return jsonify({"error": error_msg}), 500
+    
+    # Test OpenAI connectivity with the actual model we'll use
+    try:
+        print(f"Testing OpenAI connection with model {MODEL_NAME}...")
+        test_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": "Say 'Connection established' in 5 words or less."}],
+            max_tokens=10
+        )
+        print(f"OpenAI API test successful! Response: {test_response.choices[0].message.content}")
+    except Exception as e:
+        error_msg = f"OpenAI API test failed: {type(e).__name__}: {str(e)}"
+        print(f"Error: {error_msg}")
+        return jsonify({"error": error_msg}), 500
+    
+    # Process uploaded file
     if "file" not in request.files:
+        print("Error: No file uploaded")
         return jsonify({"error": "No file uploaded"}), 400
 
     try:
+        print("Parsing column mappings...")
         column_map = json.loads(request.form["columnMap"])
-    except (KeyError, json.JSONDecodeError):
-        return jsonify({"error": "Invalid or missing columnMap"}), 400
+        print(f"Column mappings: {column_map}")
+    except (KeyError, json.JSONDecodeError) as e:
+        error_msg = f"Invalid column mappings: {str(e)}"
+        print(f"Error: {error_msg}")
+        return jsonify({"error": error_msg}), 400
 
     criteria = request.form.get("criteria", "Return your best estimate.")
-
+    print(f"Investment criteria: {criteria[:100]}...")
+    
+    # Get the weights if provided
+    weights_str = request.form.get("weights")
+    if weights_str:
+        try:
+            weights = json.loads(weights_str)
+            print(f"Criteria weights provided: {weights}")
+        except json.JSONDecodeError as e:
+            print(f"Warning: Invalid weights JSON: {str(e)}")
+    
+    print("Starting analysis stream...")
     ndjson_stream = stream_analysis(request.files["file"].stream, column_map, criteria)
+    
+    print("Returning streaming response")
     return Response(ndjson_stream, mimetype="application/x-ndjson")
 
 
@@ -194,9 +282,17 @@ def analyze_endpoint():
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """Simple health check endpoint."""
-    return jsonify({"status": "ok", "time": time.time()})
+    print("Health check requested")
+    return jsonify({
+        "status": "ok", 
+        "time": time.time(),
+        "openai_api_key_present": bool(os.getenv("OPENAI_API_KEY"))
+    })
 
 
 if __name__ == "__main__":
     # Only for local debugging; use gunicorn/uvicorn in prod.
+    print(f"Starting Flask development server on port 8080")
+    print(f"OpenAI API KEY present: {'Yes' if os.getenv('OPENAI_API_KEY') else 'No'}")
+    print(f"Using OpenAI model: {MODEL_NAME}")
     app.run(host="0.0.0.0", port=8080, debug=True)

@@ -321,24 +321,46 @@ export default function VCAnalysisTool() {
     });
 
   /* ─────────── Merge payload from server ─────────── */
-  const handlePayload = (data) => {
-    if (!data) return;
-    
-    if (data.error) {
-      setLastError(data.error);
-      return;
-    }
-    
-    if (Array.isArray(data.result)) {
+  /* Add this to your handlePayload function */
+const handlePayload = (data) => {
+  if (!data) return;
+  
+  if (data.error) {
+    setLastError(data.error);
+    return;
+  }
+  
+  if (Array.isArray(data.result)) {
+    // Only update progress if we have actual results
+    if (data.result.length > 0) {
       setResults((prev) => [...prev, ...data.result]);
+      
+      // Log the actual scores we're getting
+      console.log(`Received ${data.result.length} new results:`, 
+        data.result.map(r => `${r.company_name}: ${r.investability_score}`).join(', '));
+    } else {
+      // Log warning if we got an empty result array
+      console.warn("Received empty result array in payload");
     }
-    
-    if (typeof data.progress === "number") {
+  }
+  
+  if (typeof data.progress === "number") {
+    // Only update progress counter if we're making real progress
+    if (data.result && data.result.length > 0) {
       setResultCount(data.progress);
       const progressPercent = Math.round((data.progress / parsedData.length) * 100);
       setProgress(progressPercent);
+    } else if (data.error) {
+      // If there's an error, still update progress but log it
+      console.warn(`Updating progress to ${data.progress} despite error: ${data.error}`);
+      setResultCount(data.progress);
+      const progressPercent = Math.round((data.progress / parsedData.length) * 100);
+      setProgress(progressPercent);
+    } else {
+      console.warn(`Received progress update (${data.progress}) without results or error`);
     }
-  };
+  }
+};
 
   /* ─────────── Download CSV helper ─────────── */
   const downloadCSV = () => {

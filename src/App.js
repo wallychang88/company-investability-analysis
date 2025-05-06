@@ -447,80 +447,122 @@ const handlePayload = (data) => {
   );
 
   /* Top 5 table with enhanced display */
-  const TopTable = () => {
-    // Get matched company data (combines results with original data)
-    const topCompanies = useMemo(() => {
-      // Early return if no results
-      if (results.length === 0) return [];
-      
-      // Get top 5 scores
-      return results
-        .slice()
-        .sort((a, b) => b.investability_score - a.investability_score)
-        .slice(0, 5)
-        .map(result => {
-          // Find the original company data from parsedData
-          const companyName = result.company_name;
-          const originalData = parsedData.find(row => 
-            (columnMap.description && row[columnMap.description] === companyName) || 
-            (columnMap.company_name && row[columnMap.company_name] === companyName)
-          ) || {};
+  /* Top 5 table with enhanced display */
+const TopTable = () => {
+  // Get matched company data (combines results with original data)
+  const topCompanies = useMemo(() => {
+    // Early return if no results
+    if (results.length === 0) return [];
+    
+    console.log("Processing results:", results);
+    console.log("Column map:", columnMap);
+    
+    // Get top 5 scores
+    return results
+      .slice()
+      .sort((a, b) => b.investability_score - a.investability_score)
+      .slice(0, 5)
+      .map(result => {
+        // Get the company name from the result
+        const companyName = result.company_name;
+        console.log("Looking up company:", companyName);
+        
+        // Find the original company data using multiple matching strategies
+        let originalData = null;
+        
+        // First try exact match on description field
+        if (columnMap.description) {
+          originalData = parsedData.find(row => row[columnMap.description] === companyName);
+        }
+        
+        // If no match, try exact match on company_name field
+        if (!originalData && columnMap.company_name) {
+          originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
+        }
+        
+        // If still no match, try case-insensitive contains match
+        if (!originalData && columnMap.description) {
+          originalData = parsedData.find(row => {
+            const desc = row[columnMap.description];
+            return desc && desc.toLowerCase().includes(companyName.toLowerCase());
+          });
+        }
+        
+        // If still no match, try case-insensitive match on any column
+        if (!originalData) {
+          originalData = parsedData.find(row => {
+            return Object.values(row).some(value => 
+              value && typeof value === 'string' && 
+              value.toLowerCase().includes(companyName.toLowerCase())
+            );
+          });
+        }
+        
+        // Default to empty object if still no match
+        originalData = originalData || {};
+        
+        console.log("Match found?", Object.keys(originalData).length > 0);
+        
+        // Get founding year and employee count from mapped columns or fall back to defaults
+        const foundingYear = columnMap.founding_year && originalData[columnMap.founding_year] 
+          ? originalData[columnMap.founding_year] 
+          : 'N/A';
           
-          // Get founding year and employee count from mapped columns
-          const foundingYear = columnMap.founding_year ? originalData[columnMap.founding_year] : 'N/A';
-          const employeeCount = columnMap.employee_count ? originalData[columnMap.employee_count] : 'N/A';
-          
-          return {
-            name: companyName,
-            foundingYear,
-            employeeCount,
-            score: result.investability_score
-          };
-        });
-    }, [results, parsedData, columnMap]);
+        const employeeCount = columnMap.employee_count && originalData[columnMap.employee_count]
+          ? originalData[columnMap.employee_count]
+          : 'N/A';
+        
+        return {
+          name: companyName,
+          foundingYear,
+          employeeCount,
+          score: result.investability_score
+        };
+      });
+  }, [results, parsedData, columnMap]);
 
-    return (
-      <div>
-        <h3 className="font-medium text-gray-700 mb-4">Top Companies by Investability Score</h3>
-        <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+  return (
+    <div>
+      <h3 className="font-medium text-gray-700 mb-4">Top Companies by Investability Score</h3>
+      <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Company</th>
+              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Founded</th>
+              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Employees</th>
+              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Score</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {topCompanies.length === 0 ? (
               <tr>
-                <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Founded</th>
-                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Employees</th>
-                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                <td colSpan="4" className="px-6 py-4 text-center text-gray-500">No results yet</td>
               </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {topCompanies.length === 0 ? (
-                <tr>
-                  <td colSpan="4" className="px-6 py-4 text-center text-gray-500">No results yet</td>
+            ) : (
+              topCompanies.map((company, idx) => (
+                <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{company.name}</td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.foundingYear}</td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.employeeCount}</td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700 font-bold">
+                    <span className={`inline-block px-3 py-1 rounded-full ${
+                      company.score >= 7 ? "bg-green-100 text-green-800" : 
+                      company.score >= 4 ? "bg-yellow-100 text-yellow-800" : 
+                      "bg-red-100 text-red-800"
+                    }`}>
+                      {company.score}
+                    </span>
+                  </td>
                 </tr>
-              ) : (
-                topCompanies.map((company, idx) => (
-                  <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{company.name}</td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.foundingYear}</td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.employeeCount}</td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700 font-bold">
-                      <span className={`inline-block px-3 py-1 rounded-full ${
-                        company.score >= 7 ? "bg-green-100 text-green-800" : 
-                        company.score >= 4 ? "bg-yellow-100 text-yellow-800" : 
-                        "bg-red-100 text-red-800"
-                      }`}>
-                        {company.score}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   /* ─────────── Render ─────────── */
   return (

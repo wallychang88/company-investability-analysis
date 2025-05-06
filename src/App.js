@@ -386,34 +386,70 @@ const handlePayload = (data) => {
 };
 
   /* ─────────── Download CSV helper ─────────── */
-  const downloadCSV = () => {
-    if (!results.length) return;
+  /* ─────────── Download CSV helper ─────────── */
+const downloadCSV = () => {
+  if (!results.length) return;
+  
+  // Find name field (either description or company_name)
+  const companyField = columnMap.company_name || columnMap.description;
+  
+  if (!companyField) {
+    setLastError("Could not determine company name field");
+    return;
+  }
+  
+  console.log("Downloading CSV with results:", results);
+  console.log("Using company field:", companyField);
+  
+  const merged = parsedData.map((row) => {
+    // Try multiple matching strategies to find the corresponding result
+    let match = null;
     
-    // Find name field (either description or company_name)
-    const companyField = columnMap.company_name || columnMap.description;
-    
-    if (!companyField) {
-      setLastError("Could not determine company name field");
-      return;
+    // Strategy 1: Exact match on company field
+    if (companyField) {
+      match = results.find((r) => r.company_name === row[companyField]);
     }
     
-    const merged = parsedData.map((row) => {
-      const match = results.find((r) => r.company_name === row[companyField]);
-      return match ? { ...row, investability_score: match.investability_score } : row;
-    });
+    // Strategy 2: If no match found, try description field as fallback
+    if (!match && columnMap.description && companyField !== columnMap.description) {
+      match = results.find((r) => r.company_name === row[columnMap.description]);
+    }
     
-    const csv = Papa.unparse(merged, {
-      columns: [...headers, "investability_score"],
-    });
+    // Strategy 3: If still no match, try partial matching (case insensitive)
+    if (!match && companyField) {
+      const companyName = row[companyField];
+      if (companyName) {
+        match = results.find((r) => 
+          r.company_name.toLowerCase().includes(companyName.toLowerCase()) ||
+          companyName.toLowerCase().includes(r.company_name.toLowerCase())
+        );
+      }
+    }
     
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "investability_analysis.csv";
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+    // If a match was found, add the investability score to the row
+    if (match) {
+      console.log(`Match found for ${row[companyField]}: score ${match.investability_score}`);
+      return { ...row, investability_score: match.investability_score };
+    } else {
+      console.log(`No match found for ${row[companyField]}`);
+      return { ...row, investability_score: "N/A" };
+    }
+  });
+  
+  console.log(`Merged ${merged.filter(r => r.investability_score !== "N/A").length} rows with scores`);
+  
+  const csv = Papa.unparse(merged, {
+    columns: [...headers, "investability_score"],
+  });
+  
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "investability_analysis.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
   /* ─────────── UI Render helpers ─────────── */
   const renderMappingSelect = (field, label, required = false) => (
@@ -546,7 +582,7 @@ const TopTable = () => {
 
   return (
     <div>
-      <h3 className="font-medium text-gray-700 mb-4">Top Companies by Investability Score</h3>
+      <h3 className="font-medium text-gray-700 mb-4">Top 5 Companies Preview by Investability Score</h3>
       <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">

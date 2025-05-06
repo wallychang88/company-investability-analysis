@@ -22,7 +22,7 @@ const REQUIRED_COLS = [
 ];
 
 /* Optional columns offered in the UI */
-const OPTIONAL = ["country", "ownership", "founding_year", "total_raised"];
+const OPTIONAL = ["field_1", "field_2", "field_3"];
 
 /* ───────────────────── Main Component ─────────────────────────── */
 export default function VCAnalysisTool() {

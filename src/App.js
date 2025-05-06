@@ -28,7 +28,7 @@ const REQUIRED_COLS = [
 ];
 
 /* Optional columns offered in the UI */
-const OPTIONAL = ["country", "ownership", "founding_year"];
+const OPTIONAL = ["country", "ownership", "founding_year", "total_raised"];
 
 /* ───────────────────── Main Component ─────────────────────────── */
 export default function VCAnalysisTool() {
@@ -111,15 +111,16 @@ export default function VCAnalysisTool() {
           return idx !== -1 ? cleanHeaders[idx] : "";
         };
         setColumnMap({
-          employee_count: find("employee count") || find("employees"),
-          description: find("description") || find("company description"),
-          industries: find("industries") || find("industry"),
-          specialties: find("specialties") || find("specialty"),
-          products_services: find("products and services") || find("products & services") || find("products"),
-          end_markets: find("end markets") || find("markets"),
-          country: find("country") || find("location"),
-          ownership: find("ownership") || find("company type"),
-          founding_year: find("founding year") || find("founded") || find("year founded"),
+          employee_count: find("Employee Count"),
+          description: find("Description"),
+          industries: find("Industries"),
+          specialties: find("Specialties"),
+          products_services: find("Products and Services"),
+          end_markets: find("End Markets"),
+          country: find("Country"),
+          ownership: find("Ownership"),
+          founding_year: find("Founding Year"),
+          total_raised: find("Total Raised"),
         });
         
         setLastError(null);

@@ -33,7 +33,7 @@ export default function VCAnalysisTool() {
   const [columnMap, setColumnMap] = useState({});
   const [investCriteria, setInvestCriteria] = useState(
   `We invest in enterprise SaaS, software enabled services and managed service/BPO companies that:
-  • have 80–300 employees
+  • Has between 80 and 300 employees
   • Are based in the US, UK, Canada, or Israel
   • Have raised in total less than $150 million
   • Are not public, public sub, or private sub
@@ -486,18 +486,13 @@ const TopTable = () => {
     // Early return if no results
     if (results.length === 0) return [];
     
-    console.log("Processing results:", results);
-    console.log("Column map:", columnMap);
-    
-    // Get top 5 scores
+    // Get all results sorted by score
     return results
       .slice()
       .sort((a, b) => b.investability_score - a.investability_score)
-      .slice(0, 5)
       .map(result => {
         // Get the company name from the result
         const companyName = result.company_name;
-        console.log("Looking up company:", companyName);
         
         // Find the original company data using multiple matching strategies
         let originalData = null;
@@ -533,9 +528,23 @@ const TopTable = () => {
         // Default to empty object if still no match
         originalData = originalData || {};
         
-        console.log("Match found?", Object.keys(originalData).length > 0);
+        // Find website URL if it exists
+        const websiteCol = headers.find(h => 
+          h.toLowerCase() === 'website' || 
+          h.toLowerCase() === 'url' || 
+          h.toLowerCase() === 'web' || 
+          h.toLowerCase() === 'company url'
+        );
         
-        // Get founding year and employee count from mapped columns or fall back to defaults
+        const websiteUrl = websiteCol && originalData[websiteCol] ? originalData[websiteCol] : '';
+        
+        // Format website URL - ensure it has http/https
+        let formattedUrl = websiteUrl;
+        if (formattedUrl && !formattedUrl.startsWith('http')) {
+          formattedUrl = 'https://' + formattedUrl;
+        }
+        
+        // Get founding year from mapped column - using the correct column map
         const foundingYear = columnMap.founding_year && originalData[columnMap.founding_year] 
           ? originalData[columnMap.founding_year] 
           : 'N/A';
@@ -548,14 +557,15 @@ const TopTable = () => {
           name: companyName,
           foundingYear,
           employeeCount,
+          website: formattedUrl,
           score: result.investability_score
         };
       });
-  }, [results, parsedData, columnMap]);
+  }, [results, parsedData, columnMap, headers]);
 
   return (
     <div>
-      <h3 className="font-medium text-gray-700 mb-4">Top 5 Companies Preview by Investability Score</h3>
+      <h3 className="font-medium text-gray-700 mb-4">Companies by Investability Score</h3>
       <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
@@ -563,13 +573,14 @@ const TopTable = () => {
               <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Company</th>
               <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Founded</th>
               <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Employees</th>
+              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Website</th>
               <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Score</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {topCompanies.length === 0 ? (
               <tr>
-                <td colSpan="4" className="px-6 py-4 text-center text-gray-500">No results yet</td>
+                <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No results yet</td>
               </tr>
             ) : (
               topCompanies.map((company, idx) => (
@@ -577,6 +588,18 @@ const TopTable = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{company.name}</td>
                   <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.foundingYear}</td>
                   <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.employeeCount}</td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">
+                    {company.website ? (
+                      <a 
+                        href={company.website} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        Visit Site
+                      </a>
+                    ) : 'N/A'}
+                  </td>
                   <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700 font-bold">
                     <span className={`inline-block px-3 py-1 rounded-full ${
                       company.score >= 7 ? "bg-green-100 text-green-800" : 

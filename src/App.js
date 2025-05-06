@@ -367,7 +367,7 @@ const handlePayload = (data) => {
   }
 };
 
-  /* ─────────── Download CSV helper ─────────── */
+ /* ─────────── Download CSV helper ─────────── */
 const downloadCSV = () => {
   if (!results.length) return;
   
@@ -377,6 +377,28 @@ const downloadCSV = () => {
   if (!companyField) {
     setLastError("Could not determine company name field");
     return;
+  }
+  
+  // Define column mapping for the output CSV
+  const columnMapping = {
+    "Company": find("Informal Name"),
+    "Founded": find("Founding Year"),
+    "FTEs": find("Employee Count"),
+    "LTM FTE Growth": find("12 Months Growth Rate %"),
+    "Ownership": find("Ownership"),
+    "Total Raised": find("Total Raised"),
+    "Latest Raised": find("Latest Raised"),
+    "Last Round": find("Date of Most Recent Investment"),
+    "Investors": find("Investors"),
+    "Parent Company": find("Parent Company"),
+    "Investability Score": null // Will be populated with calculated scores
+  };
+  
+  // Function to find column in headers (similar to the one in handleFileUpload)
+  function find(needle) {
+    const lower = headers.map(h => h.toLowerCase());
+    const idx = lower.indexOf(needle.toLowerCase());
+    return idx !== -1 ? headers[idx] : "";
   }
   
   const merged = parsedData.map((row) => {
@@ -404,18 +426,46 @@ const downloadCSV = () => {
       }
     }
     
-    // If a match was found, add the investability score to the row
-    if (match) {
-      return { ...row, investability_score: match.investability_score };
-    } else {
-      return { ...row, investability_score: "N/A" };
-    }
+    // Create the reorganized row with new column names
+    const newRow = {};
+    
+    // Add the primary columns in the specified order
+    Object.keys(columnMapping).forEach(newHeader => {
+      const sourceColumn = columnMapping[newHeader];
+      
+      if (newHeader === "Investability Score") {
+        // Add the investability score from our results
+        newRow[newHeader] = match ? match.investability_score : "N/A";
+      } else if (sourceColumn) {
+        // Add data from the source column if it exists
+        newRow[newHeader] = row[sourceColumn] || "";
+      } else {
+        // Add empty string if the source column doesn't exist
+        newRow[newHeader] = "";
+      }
+    });
+    
+    // Add all other columns that weren't explicitly mapped
+    headers.forEach(originalHeader => {
+      // Skip headers that are already included in our primary columns
+      const isAlreadyIncluded = Object.values(columnMapping).includes(originalHeader);
+      if (!isAlreadyIncluded) {
+        newRow[originalHeader] = row[originalHeader] || "";
+      }
+    });
+    
+    return newRow;
   });
   
-  console.log(`Merged ${merged.filter(r => r.investability_score !== "N/A").length} rows with scores`);
+  // Create a new array of headers in the desired order
+  const outputHeaders = [
+    ...Object.keys(columnMapping), // Primary columns in specified order
+    ...headers.filter(h => !Object.values(columnMapping).includes(h)) // Remaining columns
+  ];
   
+  // Generate the CSV with the new column order
   const csv = Papa.unparse(merged, {
-    columns: [...headers, "investability_score"],
+    columns: outputHeaders
   });
   
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });

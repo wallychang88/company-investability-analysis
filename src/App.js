@@ -638,7 +638,7 @@ const TopTable = () => {
         <header className="bg-white rounded-xl shadow-xl overflow-hidden mb-8">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-8 text-white text-center">
             <h1 className="text-3xl font-bold">SourceScrub Investability Analysis Tool</h1>
-            <p className="text-blue-100 mt-2">Analyze companies against your investment criteria</p>
+            <p className="text-blue-100 mt-2">Analyze companies against your investment criteria. Upload a raw SourceScrub CSV file.</p>
           </div>
         </header>
 

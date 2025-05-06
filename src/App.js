@@ -32,13 +32,13 @@ export default function VCAnalysisTool() {
   const [headers, setHeaders] = useState([]);
   const [columnMap, setColumnMap] = useState({});
   const [investCriteria, setInvestCriteria] = useState(
-    `We invest in enterprise SaaS, software enabled services and managed service/BPO companies that:\n
-    • have 80–300 employees\n
-    • Are based in the US, UK, Canada, or Israel\n
-    • Have raised in total less than $150 million\n
-    • Are not public, public sub, or private sub\n
-    • provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout\n
-    • have a clear, defensible moat (e.g., proprietary data or network effects)`
+  `We invest in enterprise SaaS, software enabled services and managed service/BPO companies that:
+  - have 80–300 employees
+  - Are based in the US, UK, Canada, or Israel
+  - Have raised in total less than $150 million
+  - Are not public, public sub, or private sub
+  - provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
+  - have a clear, defensible moat (e.g., proprietary data or network effects)`
   );
   const [criteriaWeights, setCriteriaWeights] = useState([]); // [{id,label,weight}]
   const [isProcessing, setIsProcessing] = useState(false);

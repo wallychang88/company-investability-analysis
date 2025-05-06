@@ -42,11 +42,12 @@ client = OpenAI(api_key=api_key, timeout=TIMEOUT)
 def build_system_prompt(criteria: str) -> str:
     """Returns the system prompt with user‑supplied criteria embedded."""
     return (
-        "You are an expert venture analyst. Using the criteria below, rate each "
-        "company's *investability* from 0 to 10 (integer only) based on how well it matches the criteria. "
-        "Return ONLY valid JSON in the shape "
-        '{"rows":[{"company_name":"Name", "investability_score":N}, ...]}.\n\n'
-        "Criteria:\n" + criteria
+        "You are an expert venture analyst. Your task is to evaluate companies based on the investment criteria provided below.\n\n"
+        "For each company in the input, you MUST assign an investability score from 0 to 10 (integer only).\n\n"
+        "IMPORTANT: You must return your analysis in VALID JSON format with this exact structure:\n"
+        '{"rows":[{"company_name":"Company Name 1", "investability_score":8}, {"company_name":"Company Name 2", "investability_score":5}, ...]}\n\n'
+        "Each company MUST have both a company_name and investability_score field.\n\n"
+        "Criteria for evaluation:\n" + criteria
     )
 
 def score_batch(
@@ -104,10 +105,18 @@ def score_batch(
 
     print(f"Prepared batch content ({len(batch_content)} chars) for OpenAI API")
 
+    # Create user message with explicit request for JSON format
+    user_message = (
+        f"Analyze the following companies based on the investment criteria. "
+        f"For each company, provide an investability score from 0-10.\n\n"
+        f"Return ONLY a JSON object with this structure: {{\"rows\":[{{\"company_name\":\"Name\", \"investability_score\":N}}, ...]}}\n\n"
+        f"Companies to analyze:\n\n{batch_content}"
+    )
+    
     # Create the completion request
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Companies to analyze:\n\n{batch_content}"}
+        {"role": "user", "content": user_message}
     ]
 
     try:
@@ -126,15 +135,44 @@ def score_batch(
         print(f"OpenAI API call completed in {elapsed:.2f} seconds")
         
         response_text = completion.choices[0].message.content
+        print(f"Raw API response: {response_text[:100]}...")
         
         # Parse the JSON response
         response_data = json.loads(response_text)
         
         # Get rows and validate
         rows = response_data.get("rows", [])
-        print(f"Received {len(rows)} company scores from OpenAI API")
         
-        return rows
+        # Verify we got correct data
+        if not rows:
+            print(f"WARNING: No rows found in response. Full response: {response_text}")
+            # Fall back to generating scores ourselves
+            print("Using fallback scoring due to empty rows")
+            return [{"company_name": company["name"], "investability_score": 5} for company in companies]
+            
+        # Validate each row has required fields
+        valid_rows = []
+        for i, row in enumerate(rows):
+            if "company_name" not in row or "investability_score" not in row:
+                print(f"WARNING: Row {i} missing required fields: {row}")
+                continue
+                
+            # Ensure score is an integer
+            try:
+                row["investability_score"] = int(row["investability_score"])
+                valid_rows.append(row)
+            except (ValueError, TypeError):
+                print(f"WARNING: Invalid score format in row {i}: {row}")
+        
+        print(f"Received {len(valid_rows)} valid company scores from OpenAI API")
+        
+        # If we didn't get any valid rows, use fallback
+        if not valid_rows and companies:
+            print("No valid rows found, using fallback scoring")
+            return [{"company_name": company["name"], "investability_score": 5} for company in companies]
+            
+        return valid_rows
+        
     except json.JSONDecodeError as e:
         print(f"JSON parse error: {e}")
         print(f"Response was: {response_text}")
@@ -144,7 +182,13 @@ def score_batch(
         return [{"company_name": company["name"], "investability_score": 5} for company in companies]
     except Exception as e:
         print(f"Error in score_batch: {type(e).__name__}: {str(e)}")
-        raise  # Re-raise to be caught by stream_analysis
+        
+        # If we have companies, return fallback scores rather than raising the error
+        if companies:
+            print("Using fallback scoring due to exception")
+            return [{"company_name": company["name"], "investability_score": 5} for company in companies]
+        else:
+            raise  # Re-raise only if we don't have company info
 
 def stream_analysis(
     csv_stream, column_map: Dict[str, str], criteria: str

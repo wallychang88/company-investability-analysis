@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json, os, time
 from typing import Dict, Generator, List
+from io import BytesIO
 
 import pandas as pd
 from flask import Flask, Response, jsonify, request
@@ -271,8 +272,16 @@ def analyze_endpoint():
         except json.JSONDecodeError as e:
             print(f"Warning: Invalid weights JSON: {str(e)}")
     
+    # Read the file into memory to prevent "I/O operation on closed file" error
+    print("Reading uploaded file into memory...")
+    uploaded_file = request.files["file"]
+    file_content = uploaded_file.read()
+    
+    # Create a BytesIO object that can be safely read multiple times
+    csv_data = BytesIO(file_content)
+    
     print("Starting analysis stream...")
-    ndjson_stream = stream_analysis(request.files["file"].stream, column_map, criteria)
+    ndjson_stream = stream_analysis(csv_data, column_map, criteria)
     
     print("Returning streaming response")
     return Response(ndjson_stream, mimetype="application/x-ndjson")

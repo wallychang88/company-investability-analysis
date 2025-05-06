@@ -544,9 +544,10 @@ const TopTable = () => {
           formattedUrl = 'https://' + formattedUrl;
         }
         
-        // Get founding year from mapped column - using the correct column map
-        const foundingYear = columnMap.founding_year && originalData[columnMap.founding_year] 
-          ? originalData[columnMap.founding_year] 
+        // Get the founding year - directly access the column mapped by the user
+        const foundingCol = columnMap.founding_year || "";
+        const foundingYear = foundingCol && originalData[foundingCol] 
+          ? originalData[foundingCol] 
           : 'N/A';
           
         const employeeCount = columnMap.employee_count && originalData[columnMap.employee_count]
@@ -567,54 +568,61 @@ const TopTable = () => {
     <div>
       <h3 className="font-medium text-gray-700 mb-4">Companies by Investability Score</h3>
       <div className="border border-gray-200 rounded-lg overflow-hidden shadow">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Company</th>
-              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Founded</th>
-              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Employees</th>
-              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Website</th>
-              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Score</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {topCompanies.length === 0 ? (
+        <div className="overflow-auto" style={{ maxHeight: '500px' }}>
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50 sticky top-0">
               <tr>
-                <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No results yet</td>
+                <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Founded</th>
+                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Employees</th>
+                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Website</th>
+                <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase tracking-wider">Score</th>
               </tr>
-            ) : (
-              topCompanies.map((company, idx) => (
-                <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{company.name}</td>
-                  <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.foundingYear}</td>
-                  <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.employeeCount}</td>
-                  <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">
-                    {company.website ? (
-                      <a 
-                        href={company.website} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 hover:underline"
-                      >
-                        Visit Site
-                      </a>
-                    ) : 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700 font-bold">
-                    <span className={`inline-block px-3 py-1 rounded-full ${
-                      company.score >= 7 ? "bg-green-100 text-green-800" : 
-                      company.score >= 4 ? "bg-yellow-100 text-yellow-800" : 
-                      "bg-red-100 text-red-800"
-                    }`}>
-                      {company.score}
-                    </span>
-                  </td>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {topCompanies.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No results yet</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                topCompanies.map((company, idx) => (
+                  <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{company.name}</td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.foundingYear}</td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.employeeCount}</td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">
+                      {company.website ? (
+                        <a 
+                          href={company.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          Visit Site
+                        </a>
+                      ) : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700 font-bold">
+                      <span className={`inline-block px-3 py-1 rounded-full ${
+                        company.score >= 7 ? "bg-green-100 text-green-800" : 
+                        company.score >= 4 ? "bg-yellow-100 text-yellow-800" : 
+                        "bg-red-100 text-red-800"
+                      }`}>
+                        {company.score}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+      {topCompanies.length > 0 && (
+        <p className="mt-2 text-xs text-gray-500 text-right">
+          Showing all {topCompanies.length} results. Scroll to see more.
+        </p>
+      )}
     </div>
   );
 };

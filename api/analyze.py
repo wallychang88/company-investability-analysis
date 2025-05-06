@@ -316,24 +316,35 @@ def stream_analysis(
         clean_csv.write(csv_content)
         clean_csv.seek(0)  # Reset pointer to beginning of file
         
-        # Try reading with more robust settings
-        print("Reading CSV with enhanced parser settings...")
+        # First read without headers to examine the file structure
+        print("Examining file structure...")
+        preview_data = pd.read_csv(
+            clean_csv, 
+            dtype=str, 
+            header=None,
+            nrows=10,  # Just read the first 10 rows to examine structure
+            encoding='utf-8'
+        )
+        
+        print(f"Preview data shape: {preview_data.shape}")
+        
+        # Print the first few rows to help diagnose
+        for i in range(min(7, len(preview_data))):
+            print(f"Row {i}: First few values: {[str(x)[:20] + '...' if len(str(x)) > 20 else str(x) for x in preview_data.iloc[i][:5]]}")
+        
+        # Now read the file again, skipping the first 4 rows to get to the header
+        clean_csv.seek(0)
+        print("Reading CSV with skiprows=4 to get to header row...")
+        
         all_data = pd.read_csv(
             clean_csv, 
             dtype=str, 
-            header=4,  # Still using header at row 4
-            encoding='utf-8',
-            engine='c',  # Use the faster C engine
-            on_bad_lines='skip',  # Skip bad lines instead of failing
-            encoding_errors='replace',  # Replace encoding errors
-            quotechar='"',  # Explicitly set quote character
-            sep=',',  # Explicitly set separator
-            low_memory=False  # Avoid dtype warnings
+            skiprows=4,  # Skip first 4 rows to get to header
+            encoding='utf-8'
         )
-        print(f"Successfully read CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
         
-        # Debug the column headers without modifying them
-        print("Column headers:", list(all_data.columns))
+        print(f"Successfully read CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
+        print("Column headers:", list(all_data.columns)[:10])  # Print first 10 headers
         
         total_rows = len(all_data)
         all_data = all_data.fillna("")

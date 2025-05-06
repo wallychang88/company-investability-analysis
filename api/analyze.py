@@ -285,7 +285,7 @@ def stream_analysis(
     try:
         # Instead of reading the stream twice, read it once into a DataFrame
         print("Reading CSV data...")
-        all_data = pd.read_csv(csv_stream, dtype=str)
+        all_data = pd.read_csv(csv_stream, dtype=str, header=4)
         total_rows = len(all_data)
         all_data = all_data.fillna("")
         print(f"Found {total_rows} total rows in CSV")

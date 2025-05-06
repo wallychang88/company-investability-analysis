@@ -25,6 +25,10 @@ const REQUIRED_COLS = [
   "specialties",
   "products_services",
   "end_markets",
+  "country",
+  "ownership",
+  "total_raised",
+  "latest_raised"
 ];
 
 /* Optional columns offered in the UI */
@@ -68,66 +72,69 @@ export default function VCAnalysisTool() {
 
   /* ─────────── File Upload & Parse ─────────── */
   const handleFileUpload = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    setFile(f);
+  const f = e.target.files[0];
+  if (!f) return;
+  setFile(f);
 
-    Papa.parse(f, {
-      delimiter: "", // auto‑detect (csv / tsv / pipe)
-      header: false,
-      skipEmptyLines: false,
-      complete: ({ data }) => {
-        // Check if there's enough rows for the header
-        if (data.length <= HEADER_ROW_INDEX) {
-          setLastError(`File needs at least ${HEADER_ROW_INDEX + 1} rows`);
-          return;
-        }
-        
-        const hdr = data[HEADER_ROW_INDEX];
-        if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
-          setLastError("Could not detect headers in file");
-          return;
-        }
-        
-        const rows = data
-          .slice(HEADER_ROW_INDEX + 1)
-          .map((row) => {
-            const o = {};
-            hdr.forEach((h, idx) => {
-              if (h) o[h.trim()] = row[idx];
-            });
-            return o;
-          })
-          .filter((o) => Object.keys(o).length > 0);
+  Papa.parse(f, {
+    delimiter: "", // auto‑detect (csv / tsv / pipe)
+    header: false,
+    skipEmptyLines: false,
+    complete: ({ data }) => {
+      // Check if there's enough rows for the header
+      if (data.length <= HEADER_ROW_INDEX) {
+        setLastError(`File needs at least ${HEADER_ROW_INDEX + 1} rows`);
+        return;
+      }
+      
+      const hdr = data[HEADER_ROW_INDEX];
+      if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
+        setLastError("Could not detect headers in file");
+        return;
+      }
+      
+      const rows = data
+        .slice(HEADER_ROW_INDEX + 1)
+        .map((row) => {
+          const o = {};
+          hdr.forEach((h, idx) => {
+            if (h) o[h.trim()] = row[idx];
+          });
+          return o;
+        })
+        .filter((o) => Object.keys(o).length > 0);
 
-        setParsedData(rows);
-        const cleanHeaders = hdr.filter(Boolean).map((h) => h.trim());
-        setHeaders(cleanHeaders);
+      setParsedData(rows);
+      const cleanHeaders = hdr.filter(Boolean).map((h) => h.trim());
+      setHeaders(cleanHeaders);
 
-        // Auto‑map columns (case‑insensitive match)
-        const lower = cleanHeaders.map((h) => h.toLowerCase());
-        const find = (needle) => {
-          const idx = lower.indexOf(needle);
-          return idx !== -1 ? cleanHeaders[idx] : "";
-        };
-        setColumnMap({
-            employee_count: find("employee count") || find("employees"),
-            description: find("description") || find("company description"),
-            industries: find("industries") || find("industry"),
-            specialties: find("specialties") || find("specialty"),
-            products_services: find("products and services") || find("products & services") || find("products"),
-            end_markets: find("end markets") || find("markets"),
-            country: find("country") || find("location"),
-            ownership: find("ownership") || find("company type"),
-            founding_year: find("founding year") || find("founded") || find("year founded"),
-            total_raised: find("total raised") || find("funding") || find("raised")
-        });
-        
-        setLastError(null);
-      },
-      error: (err) => setLastError(`CSV parse error: ${err.message}`),
-    });
-  };
+      // Auto‑map columns (case‑insensitive match)
+      const lower = cleanHeaders.map((h) => h.toLowerCase());
+      const find = (needle) => {
+        const idx = lower.indexOf(needle.toLowerCase());
+        return idx !== -1 ? cleanHeaders[idx] : "";
+      };
+      setColumnMap({
+        employee_count: find("employee count") || find("employees"),
+        description: find("description") || find("company description"),
+        industries: find("industries") || find("industry"),
+        specialties: find("specialties") || find("specialty"),
+        products_services: find("products and services") || find("products & services") || find("products"),
+        end_markets: find("end markets") || find("markets"),
+        country: find("country") || find("location") || find("hq country"),
+        ownership: find("ownership") || find("company type") || find("company status"),
+        total_raised: find("total raised") || find("total funding") || find("funding"),
+        latest_raised: find("latest raised") || find("latest round") || find("last fundraise"),
+        field_1: "",
+        field_2: "",
+        field_3: ""
+      });
+      
+      setLastError(null);
+    },
+    error: (err) => setLastError(`CSV parse error: ${err.message}`),
+  });
+};
 
   /* ─────────── Column mapping helpers ─────────── */
   const updateMapping = (field, value) =>
@@ -385,7 +392,6 @@ const handlePayload = (data) => {
   }
 };
 
-  /* ─────────── Download CSV helper ─────────── */
   /* ─────────── Download CSV helper ─────────── */
 const downloadCSV = () => {
   if (!results.length) return;

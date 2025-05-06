@@ -32,6 +32,7 @@ export default function VCAnalysisTool() {
   const [parsedData, setParsedData] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [columnMap, setColumnMap] = useState({});
+  const [delimiterType, setDelimiterType] = useState("auto");
   const [investCriteria, setInvestCriteria] = useState(
   `We invest in: 
   • Enterprise SaaS, software enabled services and managed service/BPO companies
@@ -68,7 +69,6 @@ export default function VCAnalysisTool() {
   }, [investCriteria]);
 
   /* ─────────── File Upload & Parse ─────────── */
- // In App.js - Modified handleFileUpload function with targeted header detection
 
 const handleFileUpload = (e) => {
   const f = e.target.files[0];
@@ -801,17 +801,63 @@ const TopTable = () => {
         )}
 
         {/* 1. Upload */}
-        <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-blue-50 space-y-4">
-          <h2 className="text-xl font-semibold text-blue-800 flex items-center">Upload CSV / TSV File</h2>
-          <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-200 rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition text-center">
-            <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={handleFileUpload} className="hidden" />
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            <span className="mt-2 text-base text-gray-600">{file ? file.name : "Click to select a file or drop it here"}</span>
-            <span className="text-xs text-gray-500 mt-1">CSV/TSV format with company data</span>
-          </label>
-        </section>
+<section className="p-6 mb-6 border border-blue-100 rounded-lg bg-blue-50 space-y-4">
+  <h2 className="text-xl font-semibold text-blue-800 flex items-center">Upload CSV / TSV File</h2>
+  <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-200 rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition text-center">
+    <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={handleFileUpload} className="hidden" />
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+    </svg>
+    <span className="mt-2 text-base text-gray-600">{file ? file.name : "Click to select a file or drop it here"}</span>
+    <span className="text-xs text-gray-500 mt-1">CSV/TSV format with company data</span>
+  </label>
+  
+  {/* Add delimiter selector component here */}
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-700 mb-1">
+      CSV Delimiter
+      <span className="text-blue-600 ml-1">(Select if auto-detection fails)</span>
+    </label>
+    <div className="flex space-x-4">
+      <label className="inline-flex items-center">
+        <input
+          type="radio"
+          checked={delimiterType === "auto"}
+          onChange={() => setDelimiterType("auto")}
+          className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+        />
+        <span className="ml-2 text-sm text-gray-700">Auto-detect</span>
+      </label>
+      <label className="inline-flex items-center">
+        <input
+          type="radio"
+          checked={delimiterType === "comma"}
+          onChange={() => setDelimiterType("comma")}
+          className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+        />
+        <span className="ml-2 text-sm text-gray-700">Comma (,)</span>
+      </label>
+      <label className="inline-flex items-center">
+        <input
+          type="radio"
+          checked={delimiterType === "tab"}
+          onChange={() => setDelimiterType("tab")}
+          className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+        />
+        <span className="ml-2 text-sm text-gray-700">Tab</span>
+      </label>
+      <label className="inline-flex items-center">
+        <input
+          type="radio"
+          checked={delimiterType === "pipe"}
+          onChange={() => setDelimiterType("pipe")}
+          className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+        />
+        <span className="ml-2 text-sm text-gray-700">Pipe (|)</span>
+      </label>
+    </div>
+  </div>
+</section>
 
         {/* 2. Preview */}
         {parsedData.length > 0 && (

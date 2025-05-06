@@ -322,6 +322,7 @@ export default function VCAnalysisTool() {
 
   /* ─────────── Merge payload from server ─────────── */
   /* Add this to your handlePayload function */
+/* ─────────── Merge payload from server ─────────── */
 const handlePayload = (data) => {
   if (!data) return;
   
@@ -331,34 +332,55 @@ const handlePayload = (data) => {
   }
   
   if (Array.isArray(data.result)) {
-    // Only update progress if we have actual results
+    // Log the incoming results for debugging
+    console.log(`Received ${data.result.length} results from server:`, data.result);
+    
     if (data.result.length > 0) {
-      setResults((prev) => [...prev, ...data.result]);
+      // Check for valid data before updating
+      const validResults = data.result.filter(r => 
+        r.company_name && typeof r.investability_score !== 'undefined'
+      );
       
-      // Log the actual scores we're getting
-      console.log(`Received ${data.result.length} new results:`, 
-        data.result.map(r => `${r.company_name}: ${r.investability_score}`).join(', '));
+      if (validResults.length > 0) {
+        console.log(`Adding ${validResults.length} valid results to state`);
+        
+        // Log sample company names to help with debugging
+        const sampleNames = validResults.slice(0, 3).map(r => r.company_name);
+        console.log(`Sample company names: ${sampleNames.join(', ')}`);
+        
+        // Update results state
+        setResults(prev => {
+          // Filter out duplicates
+          const newResults = [...prev];
+          validResults.forEach(result => {
+            // Check if this company is already in results
+            const existingIndex = newResults.findIndex(r => r.company_name === result.company_name);
+            if (existingIndex >= 0) {
+              // Update existing entry
+              newResults[existingIndex] = result;
+            } else {
+              // Add new entry
+              newResults.push(result);
+            }
+          });
+          
+          return newResults;
+        });
+      } else {
+        console.warn("Received results but none were valid:", data.result);
+      }
     } else {
-      // Log warning if we got an empty result array
-      console.warn("Received empty result array in payload");
+      console.warn("Received empty result array");
     }
   }
   
   if (typeof data.progress === "number") {
-    // Only update progress counter if we're making real progress
-    if (data.result && data.result.length > 0) {
-      setResultCount(data.progress);
-      const progressPercent = Math.round((data.progress / parsedData.length) * 100);
-      setProgress(progressPercent);
-    } else if (data.error) {
-      // If there's an error, still update progress but log it
-      console.warn(`Updating progress to ${data.progress} despite error: ${data.error}`);
-      setResultCount(data.progress);
-      const progressPercent = Math.round((data.progress / parsedData.length) * 100);
-      setProgress(progressPercent);
-    } else {
-      console.warn(`Received progress update (${data.progress}) without results or error`);
-    }
+    // Always update progress counter for UX feedback
+    setResultCount(data.progress);
+    
+    const progressPercent = Math.min(100, Math.round((data.progress / parsedData.length) * 100));
+    setProgress(progressPercent);
+    console.log(`Updated progress: ${data.progress}/${parsedData.length} (${progressPercent}%)`);
   }
 };
 

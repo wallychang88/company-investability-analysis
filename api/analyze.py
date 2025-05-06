@@ -302,7 +302,6 @@ def stream_analysis(
         # Read the file content
         csv_content = csv_stream.read()
         print(f"File size: {len(csv_content)} bytes")
-        print(f"First 100 bytes (hex): {csv_content[:100].hex()}")
         
         # Create a new BytesIO object with the content
         clean_csv = BytesIO()
@@ -312,108 +311,34 @@ def stream_analysis(
             # Remove BOM if present
             csv_content = csv_content[3:]
             print("Removed BOM from file")
-            print(f"New first 100 bytes (hex): {csv_content[:100].hex()}")
-        
-        # Check for other common BOMs
-        if csv_content.startswith(b'\xfe\xff') or csv_content.startswith(b'\xff\xfe'):
-            print("WARNING: Detected UTF-16 BOM")
-            if csv_content.startswith(b'\xfe\xff'):
-                csv_content = csv_content[2:]
-                print("Removed UTF-16 BE BOM")
-            else:
-                csv_content = csv_content[2:]
-                print("Removed UTF-16 LE BOM")
-        
-        if csv_content.startswith(b'\x00\x00\xfe\xff') or csv_content.startswith(b'\xff\xfe\x00\x00'):
-            print("WARNING: Detected UTF-32 BOM")
-            if csv_content.startswith(b'\x00\x00\xfe\xff'):
-                csv_content = csv_content[4:]
-                print("Removed UTF-32 BE BOM")
-            else:
-                csv_content = csv_content[4:]
-                print("Removed UTF-32 LE BOM")
         
         # Write cleaned content to the new buffer
         clean_csv.write(csv_content)
         clean_csv.seek(0)  # Reset pointer to beginning of file
         
-        # Try multiple encoding options if needed
-        all_data = None
-        encodings_to_try = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252', 'iso-8859-1']
+        # Try reading with more robust settings
+        print("Reading CSV with enhanced parser settings...")
+        all_data = pd.read_csv(
+            clean_csv, 
+            dtype=str, 
+            header=4,  # Still using header at row 4
+            encoding='utf-8',
+            engine='c',  # Use the faster C engine
+            on_bad_lines='skip',  # Skip bad lines instead of failing
+            encoding_errors='replace',  # Replace encoding errors
+            quotechar='"',  # Explicitly set quote character
+            sep=',',  # Explicitly set separator
+            low_memory=False  # Avoid dtype warnings
+        )
+        print(f"Successfully read CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
         
-        for encoding in encodings_to_try:
-            try:
-                print(f"Trying to read CSV with encoding: {encoding}")
-                clean_csv.seek(0)
-                all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding=encoding)
-                print(f"Successfully read CSV with encoding: {encoding}")
-                
-                # Apply column name normalization
-                print("Original column names:", list(all_data.columns))
-                all_data.columns = [
-                    col.strip()
-                       .replace('\ufeff', '')
-                       .replace('\r', '')
-                       .replace('\n', '')
-                       .replace('\t', ' ')
-                       .replace('\xa0', ' ')  # Non-breaking space
-                    for col in all_data.columns
-                ]
-                print("Normalized column names:", list(all_data.columns))
-                
-                break
-            except Exception as e:
-                print(f"Failed with encoding {encoding}: {e}")
-        
-        if all_data is None:
-            print("All encoding attempts failed. Trying with chardet detection...")
-            # Try to detect encoding
-            import chardet
-            clean_csv.seek(0)
-            result = chardet.detect(csv_content)
-            detected_encoding = result['encoding']
-            confidence = result['confidence']
-            print(f"Detected encoding: {detected_encoding} (confidence: {confidence})")
-            
-            clean_csv.seek(0)
-            all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding=detected_encoding)
-            print(f"Read CSV with detected encoding: {detected_encoding}")
-            
-            # Apply column name normalization here too
-            print("Original column names (chardet):", list(all_data.columns))
-            all_data.columns = [
-                col.strip()
-                   .replace('\ufeff', '')
-                   .replace('\r', '')
-                   .replace('\n', '')
-                   .replace('\t', ' ')
-                   .replace('\xa0', ' ')  # Non-breaking space
-                for col in all_data.columns
-            ]
-            print("Normalized column names (chardet):", list(all_data.columns))
-        
-        # Print detailed column info
-        print("Column names with detailed inspection:")
-        for i, col in enumerate(all_data.columns):
-            print(f"Column {i}: '{col}' - Hex: {' '.join(hex(ord(c))[2:] for c in col)}")
-        
-        # Fix any potential line ending issues - using updated methods instead of applymap
-        print("Fixing line endings...")
-        all_data = all_data.map(lambda x: x.replace('\r', '') if isinstance(x, str) else x)
-        
-        # Remove any non-printable characters - using updated methods instead of applymap
-        print("Removing non-printable characters...")
-        def remove_nonprintable(x):
-            if isinstance(x, str):
-                return ''.join(c for c in x if c.isprintable())
-            return x
-            
-        all_data = all_data.map(remove_nonprintable)
+        # Debug the column headers without modifying them
+        print("Column headers:", list(all_data.columns))
         
         total_rows = len(all_data)
         all_data = all_data.fillna("")
         print(f"Successfully processed file. Found {total_rows} total rows in CSV")
-        
+            
         # Process in chunks
         chunk_size = 1000
         for chunk_start in range(0, total_rows, chunk_size):
@@ -449,9 +374,6 @@ def stream_analysis(
                     }
                 except Exception as e:
                     print(f"Unexpected error in batch processing: {type(e).__name__}: {str(e)}")
-                    print(f"Error details: {str(e)}")
-                    import traceback
-                    print(traceback.format_exc())
                     payload = {
                         "progress": processed + batch_size,
                         "error": f"Error: {type(e).__name__}: {str(e)}",

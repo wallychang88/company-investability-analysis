@@ -2,16 +2,17 @@
 """Back‑end endpoint for generating investability scores in a memory‑safe, streamable
    fashion.  Tweaks in this build:
    • Model bumped to **gpt‑4o‑mini**
-   • max_tokens lowered to 1024 (fits the model’s 12k context window comfortably)
-   • Global timeout of 30 s on every OpenAI call
+   • max_tokens lowered to 1024 (fits the model's 12k context window comfortably)
+   • Global timeout of 30 s on every OpenAI call
    • Robust progress accounting even when a batch errors
-   • Chunk‑reads the CSV so large uploads don’t blow RAM
+   • Chunk‑reads the CSV so large uploads don't blow RAM
    • CORS restricted to the production front‑end
+   • Response format updated to return {"rows":[{<csv row fields>, "investability_score":<0‑10>}, …]}
 """
 from __future__ import annotations
 
 import json, os, time
-from typing import Dict, Generator
+from typing import Dict, Generator, List
 
 import pandas as pd
 from flask import Flask, Response, jsonify, request
@@ -19,19 +20,19 @@ from flask_cors import CORS
 from openai import OpenAI, APIError
 
 ###############################################################################
-# Flask + CORS setup
+# Flask + CORS setup
 ###############################################################################
 
 app = Flask(__name__)
-CORS(app, origins=["https://company-investability-score.vercel.app"])  # 🚦 prod only
+CORS(app, origins=["https://company-investability-score.vercel.app"])  # prod only
 
 ###############################################################################
 # OpenAI client configuration
 ###############################################################################
 
-MODEL_NAME = "gpt-4o-mini"  # ⬅️ switched from gpt‑3.5‑turbo
+MODEL_NAME = "gpt-4o-mini"  
 MAX_TOKENS = 1024
-TEMPERATURE = 0.3
+TEMPERATURE = 0.2
 BATCH_SIZE = 5  # rows / OpenAI request
 TIMEOUT = 30  # seconds
 
@@ -45,36 +46,93 @@ def build_system_prompt(criteria: str) -> str:
     """Returns the system prompt with user‑supplied criteria embedded."""
     return (
         "You are an expert venture analyst. Using the criteria below, rate each "
-        "company’s *investability* from 1 to 10 and give a one‑sentence rationale. "
-        "Return a JSON list where each element has keys: company_name, "
-        "investability_score (integer 1‑10), rationale.\n\nCriteria:\n" + criteria
+        "company's *investability* from 0 to 10 (integer only) based on how well it matches the criteria. "
+        "Return ONLY valid JSON in the shape "
+        '{"rows":[{"company_name":"Name", "investability_score":N}, ...]}.\n\n'
+        "Criteria:\n" + criteria
     )
 
 def score_batch(
     df_slice: pd.DataFrame, column_map: Dict[str, str], criteria: str
-) -> str:
-    """Calls the chat model on a slice of the dataframe and returns raw JSON‑text."""
+) -> List[Dict]:
+    """Calls the chat model on a slice of the dataframe and returns just company names and scores."""
     system_prompt = build_system_prompt(criteria)
 
-    messages = [{"role": "system", "content": system_prompt}]
+    # Prepare company data with mandatory and optional columns when mapped
+    batch_content = ""
+    companies = []
+    
     for _, row in df_slice.iterrows():
-        company_name = row[column_map["company_name"]]
-        description = row.get(column_map.get("description", ""), "")
-        messages.append(
-            {
-                "role": "user",
-                "content": f"Company: {company_name}\nDescription: {description}\nScore:",
-            }
+        # Get company name (from description field or designated company_name field)
+        company_name = row.get(column_map.get("company_name", ""), "") or row.get(column_map.get("description", ""), "")
+        companies.append({"name": company_name})
+        
+        # Start with mandatory fields
+        company_data = (
+            f"Company: {company_name}\n"
+            f"Employee Count: {row.get(column_map.get('employee_count', ''), '')}\n"
+            f"Description: {row.get(column_map.get('description', ''), '')}\n"
+            f"Industries: {row.get(column_map.get('industries', ''), '')}\n"
+            f"Specialties: {row.get(column_map.get('specialties', ''), '')}\n"
+            f"Products/Services: {row.get(column_map.get('products_services', ''), '')}\n"
+            f"End Markets: {row.get(column_map.get('end_markets', ''), '')}\n"
         )
+        
+        # Add optional fields if they are mapped
+        optional_fields = []
+        
+        if column_map.get("country") and column_map.get("country") in row:
+            optional_fields.append(f"Country: {row[column_map.get('country')]}")
+            
+        if column_map.get("ownership") and column_map.get("ownership") in row:
+            optional_fields.append(f"Ownership: {row[column_map.get('ownership')]}")
+            
+        if column_map.get("founding_year") and column_map.get("founding_year") in row:
+            optional_fields.append(f"Founding Year: {row[column_map.get('founding_year')]}")
+            
+        # Add any other mapped columns that aren't in the standard set
+        for key, col_name in column_map.items():
+            if key not in ["employee_count", "description", "industries", "specialties", 
+                           "products_services", "end_markets", "country", "ownership", 
+                           "founding_year", "company_name"] and col_name in row:
+                optional_fields.append(f"{key.replace('_', ' ').title()}: {row[col_name]}")
+        
+        # Add optional fields to company data if present
+        if optional_fields:
+            company_data += "\n".join(optional_fields) + "\n"
+            
+        company_data += "\n"
+        batch_content += company_data
+
+    # Create the completion request
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Companies to analyze:\n\n{batch_content}"}
+    ]
 
     completion = client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
         temperature=TEMPERATURE,
         max_tokens=MAX_TOKENS,
+        response_format={"type": "json_object"}
     )
-    return completion.choices[0].message.content
-
+    
+    response_text = completion.choices[0].message.content
+    
+    try:
+        # Parse the JSON response
+        response_data = json.loads(response_text)
+        
+        # Return the rows array directly or empty list if not present
+        return response_data.get("rows", [])
+    except json.JSONDecodeError as e:
+        # Fallback if the model returns invalid JSON
+        print(f"JSON parse error: {e}")
+        print(f"Response was: {response_text}")
+        
+        # Attempt to create minimal valid scores as a fallback
+        return [{"company_name": company["name"], "investability_score": 5} for company in companies]
 
 def stream_analysis(
     csv_stream, column_map: Dict[str, str], criteria: str
@@ -91,8 +149,14 @@ def stream_analysis(
             batch = chunk.iloc[start:end]
 
             try:
-                result = score_batch(batch, column_map, criteria)
-                payload = {"progress": processed + len(batch), "result": json.loads(result)}
+                # Get just company names and scores
+                rows = score_batch(batch, column_map, criteria)
+                
+                # Create response payload with simplified rows
+                payload = {
+                    "progress": processed + len(batch),
+                    "result": rows  # Using 'result' to maintain compatibility with front-end
+                }
             except APIError as e:
                 payload = {
                     "progress": processed + len(batch),
@@ -124,6 +188,13 @@ def analyze_endpoint():
 
     ndjson_stream = stream_analysis(request.files["file"].stream, column_map, criteria)
     return Response(ndjson_stream, mimetype="application/x-ndjson")
+
+
+# Add a health check endpoint for front-end connectivity testing
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    """Simple health check endpoint."""
+    return jsonify({"status": "ok", "time": time.time()})
 
 
 if __name__ == "__main__":

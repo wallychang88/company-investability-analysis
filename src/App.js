@@ -221,12 +221,6 @@ export default function VCAnalysisTool() {
     }
 
     try {
-      // Log what we're sending (for debugging only)
-      console.log("Sending request with:", {
-        mappings: columnMap,
-        criteria: investCriteria.split('\n').filter(l => l.trim()),
-        weights: criteriaWeights
-      });
       
       const res = await fetch("/api/analyze", { 
         method: "POST", 
@@ -340,9 +334,6 @@ const handlePayload = (data) => {
   }
   
   if (Array.isArray(data.result)) {
-    // Log the incoming results for debugging
-    console.log(`Received ${data.result.length} results from server:`, data.result);
-    
     if (data.result.length > 0) {
       // Check for valid data before updating
       const validResults = data.result.filter(r => 
@@ -350,12 +341,6 @@ const handlePayload = (data) => {
       );
       
       if (validResults.length > 0) {
-        console.log(`Adding ${validResults.length} valid results to state`);
-        
-        // Log sample company names to help with debugging
-        const sampleNames = validResults.slice(0, 3).map(r => r.company_name);
-        console.log(`Sample company names: ${sampleNames.join(', ')}`);
-        
         // Update results state
         setResults(prev => {
           // Filter out duplicates
@@ -374,11 +359,7 @@ const handlePayload = (data) => {
           
           return newResults;
         });
-      } else {
-        console.warn("Received results but none were valid:", data.result);
       }
-    } else {
-      console.warn("Received empty result array");
     }
   }
   
@@ -388,7 +369,6 @@ const handlePayload = (data) => {
     
     const progressPercent = Math.min(100, Math.round((data.progress / parsedData.length) * 100));
     setProgress(progressPercent);
-    console.log(`Updated progress: ${data.progress}/${parsedData.length} (${progressPercent}%)`);
   }
 };
 
@@ -403,9 +383,6 @@ const downloadCSV = () => {
     setLastError("Could not determine company name field");
     return;
   }
-  
-  console.log("Downloading CSV with results:", results);
-  console.log("Using company field:", companyField);
   
   const merged = parsedData.map((row) => {
     // Try multiple matching strategies to find the corresponding result
@@ -434,10 +411,8 @@ const downloadCSV = () => {
     
     // If a match was found, add the investability score to the row
     if (match) {
-      console.log(`Match found for ${row[companyField]}: score ${match.investability_score}`);
       return { ...row, investability_score: match.investability_score };
     } else {
-      console.log(`No match found for ${row[companyField]}`);
       return { ...row, investability_score: "N/A" };
     }
   });

@@ -316,31 +316,43 @@ def stream_analysis(
         clean_csv.write(csv_content)
         clean_csv.seek(0)  # Reset pointer to beginning of file
         
-        # First read without headers to examine the file structure
-        print("Examining file structure...")
-        preview_data = pd.read_csv(
-            clean_csv, 
-            dtype=str, 
-            header=None,
-            nrows=10,  # Just read the first 10 rows to examine structure
-            encoding='utf-8'
-        )
+        # First scan to find the header row (company name, informal name)
+        print("Scanning for header row...")
+        header_row_index = None
         
-        print(f"Preview data shape: {preview_data.shape}")
+        # Read the file row by row to find the header
+        for i, line in enumerate(clean_csv):
+            # Decode the line
+            try:
+                line_str = line.decode('utf-8').strip()
+            except UnicodeDecodeError:
+                line_str = line.decode('latin-1').strip()
+                
+            # Check if this line starts with "Company Name"
+            if line_str.lower().startswith('company name'):
+                parts = line_str.split(',')
+                if len(parts) >= 2 and 'informal name' in parts[1].lower():
+                    header_row_index = i
+                    print(f"Found header row at index {i}: {line_str[:60]}...")
+                    break
         
-        # Print the first few rows to help diagnose
-        for i in range(min(7, len(preview_data))):
-            print(f"Row {i}: First few values: {[str(x)[:20] + '...' if len(str(x)) > 20 else str(x) for x in preview_data.iloc[i][:5]]}")
-        
-        # Now read the file again, skipping the first 4 rows to get to the header
+        # Reset file pointer for next read
         clean_csv.seek(0)
-        print("Reading CSV with skiprows=4 to get to header row...")
         
+        if header_row_index is None:
+            print("WARNING: Could not find header row with 'Company Name' and 'Informal Name'")
+            yield json.dumps({"error": "Could not find header row in CSV file. Please ensure the file has 'Company Name' and 'Informal Name' as the first two columns."}) + "\n"
+            return
+            
+        print(f"Reading CSV with skiprows={header_row_index} for header...")
+        
+        # Now read the CSV with pandas, skipping to the header row
         all_data = pd.read_csv(
             clean_csv, 
             dtype=str, 
-            skiprows=4,  # Skip first 4 rows to get to header
-            encoding='utf-8'
+            skiprows=header_row_index,  # Skip to the detected header
+            encoding='utf-8',
+            on_bad_lines='warn'  # Be more forgiving with malformed lines
         )
         
         print(f"Successfully read CSV with {len(all_data)} rows and {len(all_data.columns)} columns")

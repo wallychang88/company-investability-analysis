@@ -242,11 +242,58 @@ def stream_analysis(
     print("Starting stream analysis")
     
     try:
-        # Read CSV data with header at row 5 (index 4)
-        all_data = pd.read_csv(csv_stream, dtype=str, header=4)
+        # Create a temporary clean copy of the file to avoid metadata/encoding issues
+        print("Creating clean copy of the uploaded file...")
+        
+        # Read the file content
+        csv_content = csv_stream.read()
+        
+        # Create a new BytesIO object with the content
+        clean_csv = BytesIO()
+        
+        # Check for BOM and other encoding issues
+        if csv_content.startswith(b'\xef\xbb\xbf'):
+            # Remove BOM if present
+            csv_content = csv_content[3:]
+            print("Removed BOM from file")
+        
+        # Write cleaned content to the new buffer
+        clean_csv.write(csv_content)
+        clean_csv.seek(0)  # Reset pointer to beginning of file
+        
+        # Try multiple encoding options if needed
+        try:
+            # First try with default encoding
+            all_data = pd.read_csv(clean_csv, dtype=str, header=4)
+        except UnicodeDecodeError:
+            # If that fails, try explicit UTF-8
+            clean_csv.seek(0)
+            print("Trying explicit UTF-8 encoding...")
+            all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding='utf-8')
+        except Exception as e:
+            # If that still fails, try with encoding detection
+            clean_csv.seek(0)
+            print(f"CSV parsing error: {str(e)}, trying with encoding detection...")
+            
+            # Try to detect encoding
+            import chardet
+            clean_csv.seek(0)
+            result = chardet.detect(csv_content)
+            detected_encoding = result['encoding']
+            print(f"Detected encoding: {detected_encoding}")
+            
+            clean_csv.seek(0)
+            all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding=detected_encoding)
+        
+        # Fix any potential line ending issues
+        all_data = all_data.applymap(lambda x: x.replace('\r', '') if isinstance(x, str) else x)
+        
+        # Remove any non-printable characters that might cause issues
+        all_data = all_data.applymap(lambda x: ''.join(c for c in x if c.isprintable()) if isinstance(x, str) else x)
+        
         total_rows = len(all_data)
         all_data = all_data.fillna("")
-        print(f"Found {total_rows} total rows in CSV")
+        print(f"Successfully processed file. Found {total_rows} total rows in CSV")
         
         # Process in chunks
         chunk_size = 1000
@@ -260,6 +307,8 @@ def stream_analysis(
                 batch = chunk.iloc[start:end]
                 batch_size = len(batch)
                 
+                print(f"Processing batch: rows {start+1}-{end} (batch size: {batch_size})")
+
                 try:
                     # Get company scores from OpenAI
                     rows = score_batch(batch, column_map, criteria)
@@ -280,7 +329,7 @@ def stream_analysis(
                         "error": f"OpenAI error: {e.__class__.__name__}: {e}",
                     }
                 except Exception as e:
-                    print(f"Unexpected error: {type(e).__name__}: {str(e)}")
+                    print(f"Unexpected error in batch processing: {type(e).__name__}: {str(e)}")
                     payload = {
                         "progress": processed + batch_size,
                         "error": f"Error: {type(e).__name__}: {str(e)}",
@@ -292,6 +341,8 @@ def stream_analysis(
                 yield json_payload + "\n"
     except Exception as e:
         print(f"Stream analysis error: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         yield json.dumps({"error": f"Stream error: {str(e)}"}) + "\n"
 
 ###############################################################################

@@ -4,7 +4,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 /**
- * VC Investability Analysis Tool – front‑end
+ * VC Investability Analysis Tool – front‑end
  * ------------------------------------------------------------------
  * This is a **full rebuild** of the original front‑end preserving all
  * UI/UX features while fixing the runtime bugs we identified:
@@ -18,7 +18,7 @@ import "react-toastify/dist/ReactToastify.css";
  */
 
 /* ─────────────────────────── Constants ─────────────────────────── */
-const HEADER_ROW_INDEX = 4; // Header row is index 4 (5‑th human row)
+const HEADER_ROW_INDEX = 4; // Header row is index 4 (5‑th human row)
 
 /* Required columns for analysis */
 const REQUIRED_COLS = [
@@ -49,6 +49,7 @@ export default function VCAnalysisTool() {
   const [progress, setProgress] = useState(0);
   const [resultCount, setResultCount] = useState(0);
   const [results, setResults] = useState([]);
+  const [lastError, setLastError] = useState(null); // Added to track errors
 
   const abortRef = useRef(null);
 
@@ -79,7 +80,18 @@ export default function VCAnalysisTool() {
       header: false,
       skipEmptyLines: false,
       complete: ({ data }) => {
+        // Check if there's enough rows for the header
+        if (data.length <= HEADER_ROW_INDEX) {
+          toast.error(`File needs at least ${HEADER_ROW_INDEX + 1} rows`);
+          return;
+        }
+        
         const hdr = data[HEADER_ROW_INDEX];
+        if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
+          toast.error("Could not detect headers in file");
+          return;
+        }
+        
         const rows = data
           .slice(HEADER_ROW_INDEX + 1)
           .map((row) => {
@@ -102,16 +114,18 @@ export default function VCAnalysisTool() {
           return idx !== -1 ? cleanHeaders[idx] : "";
         };
         setColumnMap({
-          employee_count: find("employee count"),
-          description: find("description"),
-          industries: find("industries"),
-          specialties: find("specialties"),
-          products_services: find("products and services") || find("products & services"),
-          end_markets: find("end markets"),
-          country: find("country"),
-          ownership: find("ownership"),
-          founding_year: find("founding year") || find("founded"),
+          employee_count: find("employee count") || find("employees"),
+          description: find("description") || find("company description"),
+          industries: find("industries") || find("industry"),
+          specialties: find("specialties") || find("specialty"),
+          products_services: find("products and services") || find("products & services") || find("products"),
+          end_markets: find("end markets") || find("markets"),
+          country: find("country") || find("location"),
+          ownership: find("ownership") || find("company type"),
+          founding_year: find("founding year") || find("founded") || find("year founded"),
         });
+        
+        toast.success(`Loaded ${rows.length} companies`);
       },
       error: (err) => toast.error(`CSV parse error: ${err.message}`),
     });
@@ -137,6 +151,8 @@ export default function VCAnalysisTool() {
 
   /* ─────────── API Call ─────────── */
   const processData = async () => {
+    setLastError(null);
+    
     if (!file) {
       toast.warn("Upload a file first");
       return;
@@ -145,7 +161,25 @@ export default function VCAnalysisTool() {
     // Validate required mappings
     const missing = REQUIRED_COLS.filter((c) => !columnMap[c]);
     if (missing.length) {
-      toast.error(`Map the required columns: ${missing.join(", ")}`);
+      const missingNames = missing.map(c => c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()));
+      toast.error(`Please map these required columns: ${missingNames.join(", ")}`);
+      return;
+    }
+
+    // Check if we have any rows to process
+    if (parsedData.length === 0) {
+      toast.error("No valid data rows found to process");
+      return;
+    }
+
+    // Validate criteria bullets
+    const bullets = investCriteria
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("•"));
+    
+    if (bullets.length === 0) {
+      toast.error("Please add at least one bullet point (•) criterion");
       return;
     }
 
@@ -164,18 +198,54 @@ export default function VCAnalysisTool() {
     fd.append("file", file);
     fd.append("columnMap", JSON.stringify(columnMap));
     fd.append("criteria", investCriteria);
+    
+    // Add weights if available
+    if (criteriaWeights.length > 0) {
+      fd.append("weights", JSON.stringify(
+        criteriaWeights.reduce((obj, item) => {
+          obj[item.label] = item.weight;
+          return obj;
+        }, {})
+      ));
+    }
 
     try {
-      const res = await fetch("/api/analyze", { method: "POST", body: fd, signal: controller.signal });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      // Log what we're sending
+      console.log("Sending request with:", {
+        mappings: columnMap,
+        criteria: investCriteria.split('\n').filter(l => l.trim()),
+        weights: criteriaWeights
+      });
+      
+      toast.info("Connecting to API...");
+      
+      const res = await fetch("/api/analyze", { 
+        method: "POST", 
+        body: fd, 
+        signal: controller.signal 
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`API error (${res.status}): ${errorText || res.statusText}`);
+      }
 
-      if (res.body && res.body.getReader) {
+      toast.success("Processing started");
+
+      if (res.body && typeof res.body.getReader === 'function') {
         await readStream(res.body.getReader());
       } else {
-        await readStreamXHR(fd, controller.signal); // Safari ≤17 fallback
+        // Safari ≤17 fallback
+        await readStreamXHR(fd, controller.signal);
       }
+      
+      toast.success(`Analysis complete! Processed ${resultCount} companies.`);
     } catch (err) {
-      if (err.name !== "AbortError") toast.error(err.message);
+      if (err.name !== "AbortError") {
+        console.error("Analysis error:", err);
+        setLastError(err.message || "Unknown error");
+        toast.error(`Error: ${err.message || "Connection failed"}`);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -185,16 +255,32 @@ export default function VCAnalysisTool() {
   const readStream = async (reader) => {
     const decoder = new TextDecoder();
     let buf = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let nl;
-      while ((nl = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        if (line.trim()) handlePayload(JSON.parse(line));
+    
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buf += decoder.decode(value, { stream: true });
+        let nl;
+        
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          
+          if (line.trim()) {
+            try {
+              const payload = JSON.parse(line);
+              handlePayload(payload);
+            } catch (e) {
+              console.error("Failed to parse JSON line:", line, e);
+            }
+          }
+        }
       }
+    } catch (e) {
+      console.error("Stream reading error:", e);
+      throw e;
     }
   };
 
@@ -204,48 +290,87 @@ export default function VCAnalysisTool() {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/analyze");
       xhr.responseType = "text";
+      
       signal.addEventListener("abort", () => xhr.abort());
+      
       let lastIdx = 0;
       xhr.onreadystatechange = () => {
         if (xhr.readyState >= 3) {
           const chunk = xhr.responseText.slice(lastIdx);
           lastIdx = xhr.responseText.length;
+          
           chunk
             .split("\n")
             .filter(Boolean)
-            .forEach((line) => handlePayload(JSON.parse(line)));
+            .forEach((line) => {
+              try {
+                handlePayload(JSON.parse(line));
+              } catch (e) {
+                console.error("Failed to parse JSON line:", line, e);
+              }
+            });
         }
-        if (xhr.readyState === 4) resolve();
+        
+        if (xhr.readyState === 4) {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`XHR Error: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
       };
+      
       xhr.onerror = () => reject(new Error("Network error"));
       xhr.send(body);
     });
 
   /* ─────────── Merge payload from server ─────────── */
   const handlePayload = (data) => {
+    if (!data) return;
+    
     if (data.error) {
       toast.error(data.error);
+      setLastError(data.error);
       return;
     }
+    
     if (Array.isArray(data.result)) {
       setResults((prev) => [...prev, ...data.result]);
     }
+    
     if (typeof data.progress === "number") {
       setResultCount(data.progress);
-      setProgress(Math.round((data.progress / parsedData.length) * 100));
+      const progressPercent = Math.round((data.progress / parsedData.length) * 100);
+      setProgress(progressPercent);
+      
+      // Update progress toast every 25%
+      if (progressPercent % 25 === 0 && progressPercent > 0) {
+        toast.info(`Processing: ${progressPercent}% complete`);
+      }
     }
   };
 
   /* ─────────── Download CSV helper ─────────── */
   const downloadCSV = () => {
     if (!results.length) return;
+    
+    // Find name field (either description or company_name)
+    const companyField = columnMap.company_name || columnMap.description;
+    
+    if (!companyField) {
+      toast.error("Could not determine company name field");
+      return;
+    }
+    
     const merged = parsedData.map((row) => {
-      const match = results.find((r) => r.company_name === row[columnMap.description] || r.company_name === row[columnMap.company_name]);
+      const match = results.find((r) => r.company_name === row[companyField]);
       return match ? { ...row, investability_score: match.investability_score } : row;
     });
+    
     const csv = Papa.unparse(merged, {
       columns: [...headers, "investability_score"],
     });
+    
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -261,11 +386,14 @@ export default function VCAnalysisTool() {
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label}
         {!required && <span className="text-green-600 ml-1">(Optional)</span>}
+        {required && <span className="text-red-600 ml-1">*</span>}
       </label>
       <select
         value={columnMap[field] || ""}
         onChange={(e) => updateMapping(field, e.target.value)}
-        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-200"
+        className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-200 ${
+          required && !columnMap[field] ? "border-red-300 bg-red-50" : ""
+        }`}
       >
         <option value="">Select column</option>
         {headers.map((h) => (
@@ -319,16 +447,22 @@ export default function VCAnalysisTool() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {results
-              .slice()
-              .sort((a, b) => b.investability_score - a.investability_score)
-              .slice(0, 5)
-              .map((r, idx) => (
-                <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-700">{r.company_name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-bold">{r.investability_score}</td>
-                </tr>
-              ))}
+            {results.length === 0 ? (
+              <tr>
+                <td colSpan="2" className="px-6 py-4 text-center text-gray-500">No results yet</td>
+              </tr>
+            ) : (
+              results
+                .slice()
+                .sort((a, b) => b.investability_score - a.investability_score)
+                .slice(0, 5)
+                .map((r, idx) => (
+                  <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700">{r.company_name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-bold">{r.investability_score}</td>
+                  </tr>
+                ))
+            )}
           </tbody>
         </table>
       </div>
@@ -351,7 +485,11 @@ export default function VCAnalysisTool() {
           <h2 className="text-xl font-semibold text-blue-800 flex items-center">Upload CSV / TSV File</h2>
           <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-200 rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition text-center">
             <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={handleFileUpload} className="hidden" />
-            <span className="mt-2 text-sm text-gray-600">{file ? file.name : "Select a file"}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <span className="mt-2 text-base text-gray-600">{file ? file.name : "Click to select a file or drop it here"}</span>
+            <span className="text-xs text-gray-500 mt-1">CSV/TSV format with company data</span>
           </label>
         </section>
 
@@ -396,7 +534,9 @@ export default function VCAnalysisTool() {
               )}
             </div>
             {/* Optional */}
-            <div>{OPTIONAL.map((c) => renderMappingSelect(c, c.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())))}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {OPTIONAL.map((c) => renderMappingSelect(c, c.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())))}
+            </div>
           </section>
         )}
 
@@ -408,6 +548,7 @@ export default function VCAnalysisTool() {
             onChange={(e) => setInvestCriteria(e.target.value)}
             rows={6}
             className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-200"
+            placeholder="Enter your investment criteria. Use bullet points (•) to define each criterion."
           />
           <p className="text-xs text-indigo-600">Use bullet points (•) to define each criterion.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -440,6 +581,15 @@ export default function VCAnalysisTool() {
           >
             {isProcessing ? "Processing…" : "Analyze Companies"}
           </button>
+          {!parsedData.length && file && (
+            <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>
+          )}
+          {lastError && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <p className="font-medium">Last error:</p>
+              <p>{lastError}</p>
+            </div>
+          )}
         </div>
 
         {/* Progress */}
@@ -461,6 +611,17 @@ export default function VCAnalysisTool() {
             <p className="text-center text-sm text-gray-500">
               {progress < 100 ? "Analyzing…" : "Analysis complete!"}
             </p>
+            <button
+              onClick={() => {
+                if (abortRef.current) {
+                  abortRef.current.abort();
+                  toast.info("Processing cancelled");
+                }
+              }}
+              className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+            >
+              Cancel
+            </button>
           </section>
         )}
 

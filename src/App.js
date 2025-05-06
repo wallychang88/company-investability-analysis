@@ -666,7 +666,9 @@ const TopTable = () => {
             </div>
             {/* Optional */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {OPTIONAL.map((c) => renderMappingSelect(c, c.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())))}
+              {renderMappingSelect("field_1", "Field 1")}
+              {renderMappingSelect("field_2", "Field 2")}
+              {renderMappingSelect("field_3", "Field 3")}
             </div>
           </section>
         )}

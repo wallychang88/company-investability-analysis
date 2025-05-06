@@ -155,21 +155,21 @@ def stream_analysis(
     print("Starting stream analysis")
     
     try:
-        # Count rows first
-        print("Counting total rows in CSV...")
-        df_chunks = pd.read_csv(csv_stream, dtype=str, chunksize=1000)
-        chunks = list(df_chunks)
-        total_rows = sum(len(chunk) for chunk in chunks)
+        # Instead of reading the stream twice, read it once into a DataFrame
+        print("Reading CSV data...")
+        all_data = pd.read_csv(csv_stream, dtype=str)
+        total_rows = len(all_data)
+        all_data = all_data.fillna("")
         print(f"Found {total_rows} total rows in CSV")
         
-        # Reset file pointer
-        csv_stream.seek(0)
-        
         # Process in chunks
-        for chunk_idx, chunk in enumerate(pd.read_csv(csv_stream, dtype=str, chunksize=1000)):
-            chunk = chunk.fillna("")
+        chunk_size = 1000
+        for chunk_start in range(0, total_rows, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, total_rows)
+            chunk = all_data.iloc[chunk_start:chunk_end]
             num_rows = len(chunk)
-            print(f"Processing chunk {chunk_idx+1} with {num_rows} rows")
+            chunk_idx = chunk_start // chunk_size + 1
+            print(f"Processing chunk {chunk_idx} with {num_rows} rows")
 
             for start in range(0, num_rows, BATCH_SIZE):
                 end = min(start + BATCH_SIZE, num_rows)

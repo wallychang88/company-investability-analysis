@@ -66,8 +66,9 @@ def score_batch(
     
     # Debug first row of data
     if len(df_slice) > 0:
-        print(f"First row keys: {list(df_slice.iloc[0].keys())}")
-        print(f"First row values: {list(df_slice.iloc[0].values())}")
+        print(f"First row keys: {list(df_slice.columns)}")  # Changed from iloc[0].keys() to columns
+        first_row_values = df_slice.iloc[0].values if len(df_slice) > 0 else []
+        print(f"First row values: {list(first_row_values)}")  # Safely convert numpy array to list
     
     system_prompt = build_system_prompt(criteria)
 
@@ -83,9 +84,9 @@ def score_batch(
         print(f"Mapping '{col_key}' to '{col_name}'")
         if col_name and col_name in df_slice.columns:
             print(f"  Column '{col_name}' exists in dataframe")
-            # Sample first few values
-            sample = df_slice[col_name].head(2).tolist()
-            print(f"  Sample values: {sample}")
+            # Sample first few values - safely get values
+            sample_values = df_slice[col_name].head(2).tolist() if len(df_slice) > 0 else []
+            print(f"  Sample values: {sample_values}")
         else:
             print(f"  WARNING: Column '{col_name}' NOT FOUND in dataframe")
     
@@ -99,18 +100,26 @@ def score_batch(
         
         # Debug column values
         if desc_col:
-            print(f"Description column: '{desc_col}', Value: '{row.get(desc_col, 'NOT FOUND')}'")
+            desc_value = row[desc_col] if desc_col in row else "NOT FOUND"
+            print(f"Description column: '{desc_col}', Value: '{desc_value}'")
         if name_col:
-            print(f"Company name column: '{name_col}', Value: '{row.get(name_col, 'NOT FOUND')}'")
+            name_value = row[name_col] if name_col in row else "NOT FOUND"
+            print(f"Company name column: '{name_col}', Value: '{name_value}'")
             
-        company_name = row.get(name_col, "") or row.get(desc_col, "")
+        # Safe row access
+        company_name = ""
+        if name_col and name_col in row:
+            company_name = row[name_col]
+        if not company_name and desc_col and desc_col in row:
+            company_name = row[desc_col]
+            
         print(f"Using company name: '{company_name}'")
         
         companies.append({"name": company_name})
         company_names.append(company_name)  # Store exact name for later matching
         
         # Get description without truncation
-        description = row.get(desc_col, '')
+        description = row[desc_col] if desc_col in row else ''
         
         # Start with mandatory fields - more concise format
         company_data = [f"Company: {company_name}"]
@@ -122,13 +131,14 @@ def score_batch(
         prod_col = column_map.get('products_services', '')
         end_col = column_map.get('end_markets', '')
         
+        # Safe data access
         fields = {
-            "Employee Count": row.get(emp_col, ''),
+            "Employee Count": row[emp_col] if emp_col in row else '',
             "Description": description,
-            "Industries": truncate_text(row.get(ind_col, ''), 200),
-            "Specialties": truncate_text(row.get(spec_col, ''), 200),
-            "Products/Services": truncate_text(row.get(prod_col, ''), 200),
-            "End Markets": truncate_text(row.get(end_col, ''), 200)
+            "Industries": truncate_text(row[ind_col] if ind_col in row else '', 200),
+            "Specialties": truncate_text(row[spec_col] if spec_col in row else '', 200),
+            "Products/Services": truncate_text(row[prod_col] if prod_col in row else '', 200),
+            "End Markets": truncate_text(row[end_col] if end_col in row else '', 200)
         }
         
         # Debug field values
@@ -138,7 +148,7 @@ def score_batch(
         
         # Add each field if it has content
         for label, value in fields.items():
-            if value.strip():
+            if value and value.strip():
                 company_data.append(f"{label}: {value}")
         
         # Add optional fields if they're mapped and have content
@@ -285,6 +295,8 @@ def stream_analysis(
     try:
         # Instead of reading the stream twice, read it once into a DataFrame
         print("Reading CSV data...")
+        
+        # Update the header row to index 4 (5th row) - corrected from 5 to 4
         all_data = pd.read_csv(csv_stream, dtype=str, header=4)
         total_rows = len(all_data)
         all_data = all_data.fillna("")

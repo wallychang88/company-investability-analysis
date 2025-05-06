@@ -33,8 +33,9 @@ export default function VCAnalysisTool() {
   const [headers, setHeaders] = useState([]);
   const [columnMap, setColumnMap] = useState({});
   const [investCriteria, setInvestCriteria] = useState(
-  `We invest in enterprise SaaS, software enabled services and managed service/BPO companies that:
-  • Has between 80 and 300 employees
+  `We invest in: 
+  • Enterprise SaaS, software enabled services and managed service/BPO companies
+  • Have between 80 and 300 employees
   • Are based in the US, UK, Canada, or Israel
   • Have raised in total less than $150 million
   • Ownership is private, venture capital, private equity, or seed

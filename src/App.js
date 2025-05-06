@@ -368,115 +368,101 @@ const handlePayload = (data) => {
   }
 };
 
- /* ─────────── Download CSV helper ─────────── */
-const downloadCSV = () => {
-  if (!results.length) return;
-  
-  // Find name field (either description or company_name)
-  const companyField = columnMap.company_name || columnMap.description;
-  
-  if (!companyField) {
-    setLastError("Could not determine company name field");
-    return;
-  }
-  
-  // Define column mapping for the output CSV
-  const columnMapping = {
-    "Company": find("Informal Name"),
-    "Founded": find("Founding Year"),
-    "FTEs": find("Employee Count"),
-    "LTM FTE Growth": find("12 Months Growth Rate %"),
-    "Ownership": find("Ownership"),
-    "Total Raised": find("Total Raised"),
-    "Latest Raised": find("Latest Raised"),
-    "Last Round": find("Date of Most Recent Investment"),
-    "Investors": find("Investors"),
-    "Parent Company": find("Parent Company"),
-    "Investability Score": null // Will be populated with calculated scores
-  };
-  
-  // Function to find column in headers (similar to the one in handleFileUpload)
-  function find(needle) {
-    const lower = headers.map(h => h.toLowerCase());
-    const idx = lower.indexOf(needle.toLowerCase());
-    return idx !== -1 ? headers[idx] : "";
-  }
-  
-  const merged = parsedData.map((row) => {
-    // Try multiple matching strategies to find the corresponding result
-    let match = null;
-    
-    // Strategy 1: Exact match on company field
-    if (companyField) {
-      match = results.find((r) => r.company_name === row[companyField]);
-    }
-    
-    // Strategy 2: If no match found, try description field as fallback
-    if (!match && columnMap.description && companyField !== columnMap.description) {
-      match = results.find((r) => r.company_name === row[columnMap.description]);
-    }
-    
-    // Strategy 3: If still no match, try partial matching (case insensitive)
-    if (!match && companyField) {
-      const companyName = row[companyField];
-      if (companyName) {
-        match = results.find((r) => 
-          r.company_name.toLowerCase().includes(companyName.toLowerCase()) ||
-          companyName.toLowerCase().includes(r.company_name.toLowerCase())
-        );
-      }
-    }
-    
-    // Create the reorganized row with new column names
-    const newRow = {};
-    
-    // Add the primary columns in the specified order
-    Object.keys(columnMapping).forEach(newHeader => {
-      const sourceColumn = columnMapping[newHeader];
-      
-      if (newHeader === "Investability Score") {
-        // Add the investability score from our results
-        newRow[newHeader] = match ? match.investability_score : "N/A";
-      } else if (sourceColumn) {
-        // Add data from the source column if it exists
-        newRow[newHeader] = row[sourceColumn] || "";
-      } else {
-        // Add empty string if the source column doesn't exist
-        newRow[newHeader] = "";
-      }
-    });
-    
-    // Add all other columns that weren't explicitly mapped
-    headers.forEach(originalHeader => {
-      // Skip headers that are already included in our primary columns
-      const isAlreadyIncluded = Object.values(columnMapping).includes(originalHeader);
-      if (!isAlreadyIncluded) {
-        newRow[originalHeader] = row[originalHeader] || "";
-      }
-    });
-    
-    return newRow;
-  });
-  
-  // Create a new array of headers in the desired order
-  const outputHeaders = [
-    ...Object.keys(columnMapping), // Primary columns in specified order
-    ...headers.filter(h => !Object.values(columnMapping).includes(h)) // Remaining columns
-  ];
-  
-  // Generate the CSV with the new column order
-  const csv = Papa.unparse(merged, {
-    columns: outputHeaders
-  });
-  
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "investability_analysis.csv";
-  link.click();
-  URL.revokeObjectURL(url);
-};
+         /* ─────────── Download CSV helper ─────────── */
+        const downloadCSV = () => {
+          if (!results.length) return;
+          
+          // Find name field (either description or company_name)
+          const companyField = columnMap.company_name || columnMap.description;
+          
+          if (!companyField) {
+            setLastError("Could not determine company name field");
+            return;
+          }
+          
+          // Create the reorganized data
+          const reorganizedData = parsedData.map((row) => {
+            // Find the corresponding result with the score
+            let match = null;
+            
+            // Try multiple matching strategies to find the corresponding result
+            if (companyField) {
+              match = results.find((r) => r.company_name === row[companyField]);
+            }
+            
+            if (!match && columnMap.description && companyField !== columnMap.description) {
+              match = results.find((r) => r.company_name === row[columnMap.description]);
+            }
+            
+            if (!match && companyField) {
+              const companyName = row[companyField];
+              if (companyName) {
+                match = results.find((r) => 
+                  r.company_name.toLowerCase().includes(companyName.toLowerCase()) ||
+                  companyName.toLowerCase().includes(r.company_name.toLowerCase())
+                );
+              }
+            }
+            
+            // Create new row with reorganized columns
+            const newRow = {};
+            
+            // Define and populate primary columns directly accessing the original row data
+            newRow["Company"] = row["Informal Name"] || "";
+            newRow["Founded"] = row["Founding Year"] || "";
+            newRow["FTEs"] = row["Employee Count"] || "";
+            newRow["LTM FTE Growth"] = row["12 Months Growth Rate %"] || "";
+            newRow["Ownership"] = row["Ownership"] || "";
+            newRow["Total Raised"] = row["Total Raised"] || "";
+            newRow["Latest Raised"] = row["Latest Raised"] || "";
+            newRow["Last Round"] = row["Date of Most Recent Investment"] || "";
+            newRow["Investors"] = row["Investors"] || "";
+            newRow["Parent Company"] = row["Parent Company"] || "";
+            newRow["Investability Score"] = match ? match.investability_score : "N/A";
+            
+            // Add remaining columns after the primary ones
+            const primaryColumns = [
+              "Informal Name", "Founding Year", "Employee Count", "12 Months Growth Rate %",
+              "Ownership", "Total Raised", "Latest Raised", "Date of Most Recent Investment",
+              "Investors", "Parent Company"
+            ];
+            
+            headers.forEach(originalHeader => {
+              // Skip if this column was already included in our primary columns
+              if (!primaryColumns.includes(originalHeader)) {
+                newRow[originalHeader] = row[originalHeader] || "";
+              }
+            });
+            
+            return newRow;
+          });
+          
+          // Define the column order for the output
+          const orderedColumns = [
+            "Company", "Founded", "FTEs", "LTM FTE Growth", "Ownership", 
+            "Total Raised", "Latest Raised", "Last Round", "Investors", 
+            "Parent Company", "Investability Score",
+            ...headers.filter(h => !([
+              "Informal Name", "Founding Year", "Employee Count", "12 Months Growth Rate %",
+              "Ownership", "Total Raised", "Latest Raised", "Date of Most Recent Investment",
+              "Investors", "Parent Company"
+            ].includes(h)))
+          ];
+          
+          // Generate CSV with the new structure
+          const csv = Papa.unparse(reorganizedData, {
+            columns: orderedColumns
+          });
+          
+          // Create download
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "investability_analysis.csv";
+          link.click();
+          URL.revokeObjectURL(url);
+        };
 
   /* ─────────── UI Render helpers ─────────── */
   const renderMappingSelect = (field, label, required = false) => (

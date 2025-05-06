@@ -44,6 +44,7 @@ def build_system_prompt(criteria: str) -> str:
     return (
         "You are an expert venture analyst. Your task is to evaluate companies based on the investment criteria provided below.\n\n"
         "For each company in the input, you MUST assign an investability score from 0 to 10 (integer only).\n\n"
+        "Pay special attention to employee count, country, ownership, total raised, latest round, date of most recent investment, and industry fit.\n\n"
         "IMPORTANT: You must return your analysis in VALID JSON format with this exact structure:\n"
         '{"rows":[{"company_name":"Company Name 1", "investability_score":8}, {"company_name":"Company Name 2", "investability_score":5}, ...]}\n\n'
         "Each company MUST have both a company_name and investability_score field.\n\n"
@@ -99,6 +100,7 @@ def score_batch(
         ownership_col = column_map.get('ownership', '')
         total_raised_col = column_map.get('total_raised', '')
         latest_raised_col = column_map.get('latest_raised', '')
+        recent_investment_col = column_map.get('date_of_most_recent_investment', '')
         
         # Safe data access
         fields = {
@@ -111,7 +113,8 @@ def score_batch(
             "Country": row[1][country_col] if country_col in row[1] else '',
             "Ownership": row[1][ownership_col] if ownership_col in row[1] else '',
             "Total Raised": row[1][total_raised_col] if total_raised_col in row[1] else '',
-            "Latest Raised": row[1][latest_raised_col] if latest_raised_col in row[1] else ''
+            "Latest Raised": row[1][latest_raised_col] if latest_raised_col in row[1] else '',
+            "Date of Most Recent Investment": row[1][recent_investment_col] if recent_investment_col in row[1] else ''
         }
         
         # Add each field if it has content

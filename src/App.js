@@ -18,7 +18,8 @@ const REQUIRED_COLS = [
   "country",
   "ownership",
   "total_raised",
-  "latest_raised"
+  "latest_raised",
+  "date_of_most_recent_investment"
 ];
 
 /* Optional columns offered in the UI */
@@ -120,6 +121,7 @@ export default function VCAnalysisTool() {
         ownership: find("ownership") || find("company type") || find("company status"),
         total_raised: find("total raised") || find("total funding") || find("funding"),
         latest_raised: find("latest raised") || find("latest round") || find("last fundraise"),
+        date_of_most_recent_investment: find("date of most recent investment") || find("last investment date") || find("most recent funding date"),
         field_1: "",
         field_2: "",
         field_3: ""

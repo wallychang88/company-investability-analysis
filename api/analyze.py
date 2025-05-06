@@ -239,14 +239,17 @@ def stream_analysis(
     processed = 0
     total_rows = 0
     
-    print("Starting stream analysis")
+    print("==== DETAILED DEBUG STREAM ANALYSIS ====")
+    print("Starting stream analysis with extensive debugging")
     
     try:
         # Create a temporary clean copy of the file to avoid metadata/encoding issues
         print("Creating clean copy of the uploaded file...")
         
-        # Read the file content
+        # Read the file content and get basic info
         csv_content = csv_stream.read()
+        print(f"File size: {len(csv_content)} bytes")
+        print(f"First 100 bytes (hex): {csv_content[:100].hex()}")
         
         # Create a new BytesIO object with the content
         clean_csv = BytesIO()
@@ -256,44 +259,114 @@ def stream_analysis(
             # Remove BOM if present
             csv_content = csv_content[3:]
             print("Removed BOM from file")
+            print(f"New first 100 bytes (hex): {csv_content[:100].hex()}")
+        
+        # Check for other common BOMs
+        if csv_content.startswith(b'\xfe\xff') or csv_content.startswith(b'\xff\xfe'):
+            print("WARNING: Detected UTF-16 BOM")
+            if csv_content.startswith(b'\xfe\xff'):
+                csv_content = csv_content[2:]
+                print("Removed UTF-16 BE BOM")
+            else:
+                csv_content = csv_content[2:]
+                print("Removed UTF-16 LE BOM")
+        
+        if csv_content.startswith(b'\x00\x00\xfe\xff') or csv_content.startswith(b'\xff\xfe\x00\x00'):
+            print("WARNING: Detected UTF-32 BOM")
+            if csv_content.startswith(b'\x00\x00\xfe\xff'):
+                csv_content = csv_content[4:]
+                print("Removed UTF-32 BE BOM")
+            else:
+                csv_content = csv_content[4:]
+                print("Removed UTF-32 LE BOM")
+        
+        # Check for unusual characters in the first few lines
+        try:
+            first_few_lines = csv_content[:1000].decode('utf-8').split('\n')[:10]
+            print("First few lines of the file:")
+            for i, line in enumerate(first_few_lines):
+                print(f"Line {i}: {repr(line)}")
+        except Exception as e:
+            print(f"Error decoding first few lines: {e}")
         
         # Write cleaned content to the new buffer
         clean_csv.write(csv_content)
         clean_csv.seek(0)  # Reset pointer to beginning of file
         
         # Try multiple encoding options if needed
-        try:
-            # First try with default encoding
-            all_data = pd.read_csv(clean_csv, dtype=str, header=4)
-        except UnicodeDecodeError:
-            # If that fails, try explicit UTF-8
-            clean_csv.seek(0)
-            print("Trying explicit UTF-8 encoding...")
-            all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding='utf-8')
-        except Exception as e:
-            # If that still fails, try with encoding detection
-            clean_csv.seek(0)
-            print(f"CSV parsing error: {str(e)}, trying with encoding detection...")
-            
+        all_data = None
+        encodings_to_try = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252', 'iso-8859-1']
+        
+        for encoding in encodings_to_try:
+            try:
+                print(f"Trying to read CSV with encoding: {encoding}")
+                clean_csv.seek(0)
+                all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding=encoding)
+                print(f"Successfully read CSV with encoding: {encoding}")
+                break
+            except Exception as e:
+                print(f"Failed with encoding {encoding}: {e}")
+        
+        if all_data is None:
+            print("All encoding attempts failed. Trying with chardet detection...")
             # Try to detect encoding
             import chardet
             clean_csv.seek(0)
             result = chardet.detect(csv_content)
             detected_encoding = result['encoding']
-            print(f"Detected encoding: {detected_encoding}")
+            confidence = result['confidence']
+            print(f"Detected encoding: {detected_encoding} (confidence: {confidence})")
             
             clean_csv.seek(0)
             all_data = pd.read_csv(clean_csv, dtype=str, header=4, encoding=detected_encoding)
+            print(f"Read CSV with detected encoding: {detected_encoding}")
         
-        # Fix any potential line ending issues
-        all_data = all_data.applymap(lambda x: x.replace('\r', '') if isinstance(x, str) else x)
+        # Print basic DataFrame info
+        print(f"DataFrame info: {all_data.shape[0]} rows, {all_data.shape[1]} columns")
+        print("Column names:", list(all_data.columns))
         
-        # Remove any non-printable characters that might cause issues
-        all_data = all_data.applymap(lambda x: ''.join(c for c in x if c.isprintable()) if isinstance(x, str) else x)
+        # Fix any potential line ending issues - using updated methods instead of applymap
+        print("Fixing line endings...")
+        all_data = all_data.map(lambda x: x.replace('\r', '') if isinstance(x, str) else x)
+        
+        # Remove any non-printable characters - using updated methods instead of applymap
+        print("Removing non-printable characters...")
+        def remove_nonprintable(x):
+            if isinstance(x, str):
+                return ''.join(c for c in x if c.isprintable())
+            return x
+            
+        all_data = all_data.map(remove_nonprintable)
         
         total_rows = len(all_data)
         all_data = all_data.fillna("")
         print(f"Successfully processed file. Found {total_rows} total rows in CSV")
+        
+        # Debug the first few rows of data
+        print("First 2 rows of data:")
+        for i in range(min(2, len(all_data))):
+            row_data = all_data.iloc[i]
+            print(f"Row {i}:")
+            for col in all_data.columns:
+                value = row_data[col]
+                if isinstance(value, str) and len(value) > 50:
+                    print(f"  {col}: {value[:50]}... (truncated)")
+                else:
+                    print(f"  {col}: {value}")
+        
+        # Debug column mapping
+        print("Column mapping debug:")
+        for key, value in column_map.items():
+            print(f"  {key} -> {value}")
+            if value and value in all_data.columns:
+                print(f"    Column exists in DataFrame")
+                sample = all_data[value].iloc[0] if not all_data.empty else "N/A"
+                if isinstance(sample, str) and len(sample) > 50:
+                    print(f"    Sample: {sample[:50]}... (truncated)")
+                else:
+                    print(f"    Sample: {sample}")
+            else:
+                print(f"    WARNING: Column not found in DataFrame")
         
         # Process in chunks
         chunk_size = 1000
@@ -310,7 +383,24 @@ def stream_analysis(
                 print(f"Processing batch: rows {start+1}-{end} (batch size: {batch_size})")
 
                 try:
+                    # Debug batch data before sending to OpenAI
+                    print(f"Sending batch to OpenAI with {batch_size} rows:")
+                    for i in range(min(1, batch_size)):
+                        row_data = batch.iloc[i]
+                        print(f"Sample row fields:")
+                        for field_key in ['description', 'employee_count', 'industries']:
+                            field_col = column_map.get(field_key, '')
+                            if field_col and field_col in row_data:
+                                value = row_data[field_col]
+                                if isinstance(value, str) and len(value) > 50:
+                                    print(f"  {field_key}: {value[:50]}... (truncated)")
+                                else:
+                                    print(f"  {field_key}: {value}")
+                            else:
+                                print(f"  {field_key}: NOT FOUND")
+                    
                     # Get company scores from OpenAI
+                    print("Calling score_batch function...")
                     rows = score_batch(batch, column_map, criteria)
                     
                     # Create response payload with rows
@@ -318,6 +408,13 @@ def stream_analysis(
                         "progress": processed + batch_size,
                         "result": rows
                     }
+                    
+                    # Debug API response
+                    print(f"OpenAI API returned {len(rows)} results")
+                    if len(rows) > 0:
+                        print(f"First result: {rows[0]}")
+                    else:
+                        print("WARNING: No rows returned from OpenAI API")
                     
                     processed_pct = round((processed + batch_size) / total_rows * 100)
                     print(f"Progress: {processed + batch_size}/{total_rows} ({processed_pct}%)")
@@ -330,6 +427,9 @@ def stream_analysis(
                     }
                 except Exception as e:
                     print(f"Unexpected error in batch processing: {type(e).__name__}: {str(e)}")
+                    print(f"Error details: {str(e)}")
+                    import traceback
+                    print(traceback.format_exc())
                     payload = {
                         "progress": processed + batch_size,
                         "error": f"Error: {type(e).__name__}: {str(e)}",

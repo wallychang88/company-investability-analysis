@@ -47,6 +47,7 @@ export default function VCAnalysisTool() {
   const [processingState, setProcessingState] = useState({
   isProcessing: false,
   isAutoResuming: false,
+  wasCancelled: false, 
   progress: 0,
   resultCount: 0,
   results: [],
@@ -299,6 +300,7 @@ const processData = async (resumeFrom = 0) => {
       results: [],
       canResume: false,
       // Keep isAutoResuming as is
+      wasCancelled: false,  // Reset wasCancelled flag
     }));
   } else {
     // Resuming from a point - keep results but update processing flag
@@ -488,6 +490,7 @@ const handlePayload = (data) => {
       isAutoResuming: true,
       canResume: true,
       lastError: "Processing timed out. Auto-resuming in 2 seconds...",
+      wasCancelled: false,  // Ensure wasCancelled is false during auto-resume
       resumeState: {
         progress: progress,
         totalRows: totalRows
@@ -1151,6 +1154,11 @@ return (
                   onClick={() => {
                     if (abortRef.current) {
                       abortRef.current.abort();
+                      // Set wasCancelled to true when user explicitly cancels
+                      setProcessingState(prev => ({
+                        ...prev,
+                        wasCancelled: true
+                      }));
                     }
                   }}
                   className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
@@ -1168,7 +1176,7 @@ return (
             (processingState.progress === 100 || processingState.resultCount > 0) && (
             <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
               <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
-              {processingState.progress < 100 && !processingState.isAutoResuming && (
+              {processingState.wasCancelled && !processingState.isAutoResuming && (
                 <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
                   <p className="text-amber-700">
                     <span className="font-medium">Note:</span> Showing partial results ({processingState.results.length} companies) after cancellation.

@@ -623,7 +623,7 @@ const downloadCSV = () => {
     </div>
   );
 
-/* Top 5 table with enhanced display */
+  /* Top 5 table with enhanced display */
 const TopTable = () => {
   // Get matched company data (combines results with original data)
   const topCompanies = useMemo(() => {
@@ -634,12 +634,9 @@ const TopTable = () => {
     return results
       .slice()
       .sort((a, b) => b.investability_score - a.investability_score)
-      .map((result, index) => {
+      .map(result => {
         // Get the company name from the result
-        let companyName = result.company_name;
-        
-        // Check if company name is blank/empty (marked as "blank" by the backend)
-        const isNameBlank = !companyName || companyName.trim() === '' || companyName === "blank";
+        const companyName = result.company_name;
         
         // Find the original company data using multiple matching strategies
         let originalData = null;
@@ -702,13 +699,8 @@ const TopTable = () => {
           ? originalData[columnMap.employee_count]
           : 'N/A';
         
-        // For blank company names, use "NAME FIELD BLANK (Row #)" format
-        const displayName = isNameBlank 
-          ? `NAME FIELD BLANK (Row ${index + 1})` 
-          : companyName;
-        
         return {
-          name: displayName,
+          name: companyName,
           foundingYear,
           employeeCount,
           website: formattedUrl,

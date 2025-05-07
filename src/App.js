@@ -388,7 +388,7 @@ const fd = new FormData();
       xhr.send(body);
     });
 
-/* ─────────── Modified payload handler with auto-resume ─────────── */
+/* ─────────── Merge payload from server ─────────── */
 const handlePayload = (data) => {
   if (!data) return;
   
@@ -397,43 +397,42 @@ const handlePayload = (data) => {
     return;
   }
   
-  // Handle timeout status from the server
+  // Handle timeout status from the server - this works with your EXISTING backend code
   if (data.status === 'timeout') {
     console.log("Server timeout detected, enabling auto-resume capability");
+    const progress = data.progress || 0;
+    const totalRows = data.total_rows || parsedData.length;
+    
     setResumeState({
-      progress: data.progress || 0,
-      totalRows: data.total_rows || parsedData.length
+      progress: progress,
+      totalRows: totalRows
     });
     
-    // Instead of just displaying a message, automatically trigger resume
+    // Add auto-resume functionality - this is all we need to add
     // Add a small delay to ensure the UI reflects the current state before resuming
     setTimeout(() => {
-      console.log(`Auto-resuming processing from row ${data.progress}`);
-      processData(data.progress);
-    }, 1500);
+      console.log(`Auto-resuming processing from row ${progress}`);
+      processData(progress);
+    }, 2000);
     
     // Still set canResume in case auto-resume fails and manual intervention is needed
     setCanResume(true);
-    setLastError("Processing timed out. Auto-resuming...");
+    setLastError("Processing timed out. Auto-resuming in 2 seconds...");
     return;
   }
   
-  // Rest of the existing handlePayload code...
-  // Handle status updates
+  // The rest of your existing handlePayload function remains unchanged
   if (data.status === 'starting' || data.status === 'resuming') {
     console.log(`Analysis ${data.status} with ${data.total_rows} total rows`);
-    // Update total rows if provided
     if (data.total_rows) {
       setResumeState(prev => ({...prev, totalRows: data.total_rows}));
     }
   }
   
-  // Handle chunk status
   if (data.status === 'chunk_complete' && Array.isArray(data.result)) {
     console.log(`Received chunk with ${data.result.length} results`);
     
     if (data.result.length > 0) {
-      // Check for valid data before updating
       const validResults = data.result.filter(r => 
         r.company_name && typeof r.investability_score !== 'undefined'
       );
@@ -441,18 +440,13 @@ const handlePayload = (data) => {
       console.log(`Filtered to ${validResults.length} valid results`);
       
       if (validResults.length > 0) {
-        // Update results state
         setResults(prev => {
-          // Filter out duplicates
           const newResults = [...prev];
           validResults.forEach(result => {
-            // Check if this company is already in results
             const existingIndex = newResults.findIndex(r => r.company_name === result.company_name);
             if (existingIndex >= 0) {
-              // Update existing entry
               newResults[existingIndex] = result;
             } else {
-              // Add new entry
               newResults.push(result);
             }
           });
@@ -464,19 +458,10 @@ const handlePayload = (data) => {
     }
   }
   
-  // Regular array results (backward compatibility)
-  if (Array.isArray(data.result) && !data.status) {
-    // ... existing array handling code ...
-  }
-  
   if (typeof data.progress === "number") {
-    // Always update progress counter for UX feedback
     setResultCount(data.progress);
-    
-    // Update resume state
     setResumeState(prev => ({...prev, progress: data.progress}));
     
-    // Calculate progress percentage
     const totalForCalc = data.total_rows || resumeState.totalRows || parsedData.length;
     const progressPercent = Math.min(100, Math.round((data.progress / totalForCalc) * 100));
     setProgress(progressPercent);
@@ -1043,33 +1028,16 @@ return (
           </section>
         )}
 
-{/* Replace the existing manual resume section with this auto-resume section */}
+{/* Add this to your UI, perhaps under the progress */}
 {canResume && !isProcessing && (
   <div className="text-center mt-4">
     <p className="text-amber-600 mb-2">Processing timed out due to Vercel's 60-second limit.</p>
-    <div className="flex flex-col items-center">
-      <p className="text-navy-700 mb-2">
-        <span className="animate-pulse">⟳</span> Auto-resuming from row {resumeState.progress}...
-      </p>
-      <button
-        onClick={() => processData(resumeState.progress)}
-        className="px-6 py-3 bg-navy-600 text-white font-medium rounded-lg hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-300 shadow-md"
-      >
-        Manually Resume If Needed
-      </button>
-    </div>
-  </div>
-)}
-
-{/* Add a timeout notification banner when auto-resuming */}
-{isProcessing && resumeState.progress > 0 && (
-  <div className="mb-4 p-3 bg-navy-50 border border-navy-200 rounded-lg">
-    <p className="text-navy-700 flex items-center">
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-navy-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-      Auto-resumed processing from row {resumeState.progress} of {resumeState.totalRows}
-    </p>
+    <button
+      onClick={() => processData(resumeState.progress)}
+      className="px-6 py-3 bg-navy-600 text-white font-medium rounded-lg hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-300 shadow-md"
+    >
+      Resume Processing from Row {resumeState.progress}
+    </button>
   </div>
 )}
 

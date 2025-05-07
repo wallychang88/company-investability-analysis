@@ -1032,12 +1032,29 @@ return (
 {canResume && !isProcessing && (
   <div className="text-center mt-4">
     <p className="text-amber-600 mb-2">Processing timed out due to Vercel's 60-second limit.</p>
+    <div className="animate-pulse bg-navy-50 rounded-lg p-4 mb-3">
+      <p className="text-navy-700">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Auto-resuming from row {resumeState.progress}...
+      </p>
+    </div>
     <button
       onClick={() => processData(resumeState.progress)}
       className="px-6 py-3 bg-navy-600 text-white font-medium rounded-lg hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-300 shadow-md"
     >
-      Resume Processing from Row {resumeState.progress}
+      Manually Resume If Needed
     </button>
+  </div>
+)}
+
+{/* Add a simple notification when auto-resumed */}
+{isProcessing && resumeState.progress > 0 && (
+  <div className="mb-4 p-3 bg-navy-50 border border-navy-200 rounded-lg">
+    <p className="text-navy-700">
+      <span className="font-medium">Auto-resumed:</span> Processing from row {resumeState.progress} of {resumeState.totalRows}
+    </p>
   </div>
 )}
 

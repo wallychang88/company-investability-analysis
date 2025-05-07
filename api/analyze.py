@@ -409,7 +409,7 @@ def normalize_csv(csv_content):
         return original_buffer, 4  # Default to assuming 4 metadata rows
 
 def stream_analysis(
-    csv_stream, column_map: Dict[str, str], criteria: str
+    csv_stream, column_map: Dict[str, str], criteria: str, resume_from: int = 0
 ) -> Generator[str, None, None]:
     """Yields NDJSON strings as each batch is processed."""
     processed = 0
@@ -418,29 +418,119 @@ def stream_analysis(
     print("Starting stream analysis")
     
     try:
-        # ... existing CSV parsing code ...
+        # Create a temporary clean copy of the file to avoid metadata/encoding issues
+        print("Creating clean copy of the uploaded file...")
         
-        # First try to parse normally, then use normalization if needed
+        # Read the file content
+        csv_content = csv_stream.read()
+        print(f"File size: {len(csv_content)} bytes")
+        
+        # Create a new BytesIO object with the content
+        clean_csv = BytesIO()
+        
+        # Check for BOM and other encoding issues
+        if csv_content.startswith(b'\xef\xbb\xbf'):
+            # Remove BOM if present
+            csv_content = csv_content[3:]
+            print("Removed BOM from file")
+        
+        # Write cleaned content to the new buffer
+        clean_csv.write(csv_content)
+        clean_csv.seek(0)  # Reset pointer to beginning of file
+        
+        # Try to parse the file normally first
         try:
-            # ... existing code to examine file and detect header ...
-            clean_csv, header_rows = normalize_csv(csv_content)
+            # First read without headers to examine the file structure
+            print("Examining file structure...")
+            preview_data = pd.read_csv(
+                clean_csv, 
+                dtype=str, 
+                header=None,
+                nrows=10,  # Just read the first 10 rows to examine structure
+                encoding='utf-8'
+            )
+            
+            print(f"Preview data shape: {preview_data.shape}")
+            
+            # Find header row by looking for "Company Name"
+            header_row_index = -1
+            for i in range(min(10, len(preview_data))):
+                row = preview_data.iloc[i]
+                if len(row) >= 1:
+                    if "Company Name" in str(row[0]):
+                        header_row_index = i
+                        print(f"Header row detected at row {i+1}")
+                        break
+            
+            # If not found, use default
+            if header_row_index < 0:
+                header_row_index = 4  # Default to row 5 (index 4)
+                print("Header row not detected, using default row 5")
+            
+            # Print the first few rows to help diagnose
+            for i in range(min(7, len(preview_data))):
+                print(f"Row {i}: First few values: {[str(x)[:20] + '...' if len(str(x)) > 20 else str(x) for x in preview_data.iloc[i][:5]]}")
+            
+            # Try to read with the detected header row
+            clean_csv.seek(0)
+            print(f"Reading CSV with header at row {header_row_index+1}...")
             
             all_data = pd.read_csv(
                 clean_csv, 
                 dtype=str, 
-                skiprows=header_rows,
-                header=0,
+                skiprows=header_row_index,
+                header=0,  # The row after skipping is the header
                 encoding='utf-8'
             )
             
             print(f"Successfully read CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
-        
+            
         except Exception as e:
-            # ... existing error handling ...
+            print(f"Error during initial CSV parsing: {type(e).__name__}: {str(e)}")
+            print("Attempting to normalize the CSV format...")
+            
+            # Normalize the CSV to handle delimiter/format issues
+            clean_csv, header_row_index = normalize_csv(csv_content)
+            
+            # Try parsing again with the normalized content
+            try:
+                print(f"Reading normalized CSV with skiprows={header_row_index}...")
+                
+                all_data = pd.read_csv(
+                    clean_csv, 
+                    dtype=str, 
+                    skiprows=header_row_index,
+                    header=0,
+                    encoding='utf-8'
+                )
+                
+                print(f"Successfully read normalized CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
+                
+            except Exception as e:
+                print(f"Error during normalized CSV parsing: {type(e).__name__}: {str(e)}")
+                # One last attempt - try with more permissive settings
+                clean_csv.seek(0)
+                all_data = pd.read_csv(
+                    clean_csv,
+                    dtype=str,
+                    skiprows=header_row_index,
+                    header=0,
+                    encoding='utf-8',
+                    engine='python',  # Try the python engine which is more forgiving
+                    on_bad_lines='skip'  # Skip problematic lines
+                )
+                print(f"Successfully read normalized CSV using python engine with {len(all_data)} rows")
+        
+        print("Column headers:", list(all_data.columns)[:10])  # Print first 10 headers
         
         total_rows = len(all_data)
         all_data = all_data.fillna("")
-        print(f"Successfully processed file. Found {total_rows} rows")
+        print(f"Successfully processed file. Found {total_rows} total rows in CSV")
+        
+        # If resuming, adjust starting point
+        if resume_from > 0:
+            processed = resume_from
+            print(f"Resuming from row {resume_from}")
         
         # Use smaller chunks - this is key for staying within time limits
         chunk_size = 50  # Smaller value than original 1000
@@ -448,15 +538,16 @@ def stream_analysis(
         # Send an initial progress update to client
         initial_payload = {
             "total_rows": total_rows,
-            "progress": 0,
-            "status": "starting"
+            "progress": processed,
+            "status": "starting" if resume_from == 0 else "resuming"
         }
         yield json.dumps(initial_payload) + "\n"
         
-        for chunk_start in range(0, total_rows, chunk_size):
-            # Calculate actual chunk size (may be smaller at the end)
+        # Process chunks starting from resume point if specified
+        for chunk_start in range(processed, total_rows, chunk_size):
             chunk_end = min(chunk_start + chunk_size, total_rows)
-            actual_chunk_size = chunk_end - chunk_start
+            chunk = all_data.iloc[chunk_start:chunk_end]
+            num_rows = len(chunk)
             
             # Send a pre-processing notification for this chunk
             chunk_start_payload = {
@@ -467,36 +558,39 @@ def stream_analysis(
             }
             yield json.dumps(chunk_start_payload) + "\n"
             
-            # Extract the chunk
-            chunk = all_data.iloc[chunk_start:chunk_end]
-            
-            # Process this smaller chunk
-            batch_size = len(chunk)
-            
             try:
-                # Process the entire chunk as one batch (or use your existing batch logic)
+                # Get company scores from OpenAI
                 rows = score_batch(chunk, column_map, criteria)
                 
-                # Create response payload with results
+                # Create response payload with rows
                 payload = {
-                    "progress": processed + batch_size,
+                    "progress": processed + num_rows,
                     "total_rows": total_rows,
                     "status": "chunk_complete",
                     "result": rows
                 }
                 
-                processed += batch_size
+                processed_pct = round((processed + num_rows) / total_rows * 100)
+                print(f"Progress: {processed + num_rows}/{total_rows} ({processed_pct}%)")
                 
-            except Exception as e:
-                print(f"Error processing chunk: {type(e).__name__}: {str(e)}")
+            except APIError as e:
+                print(f"OpenAI API error: {type(e).__name__}: {str(e)}")
                 payload = {
                     "progress": processed,
                     "status": "chunk_error",
-                    "error": f"Error processing rows {chunk_start}-{chunk_end}: {str(e)}"
+                    "error": f"OpenAI error: {e.__class__.__name__}: {e}",
                 }
-            
-            # Send the chunk results back to client
+            except Exception as e:
+                print(f"Unexpected error in batch processing: {type(e).__name__}: {str(e)}")
+                payload = {
+                    "progress": processed,
+                    "status": "chunk_error",
+                    "error": f"Error: {type(e).__name__}: {str(e)}",
+                }
+
+            processed += num_rows
             json_payload = json.dumps(payload)
+            
             yield json_payload + "\n"
             
         # Send a completion message

@@ -1069,7 +1069,7 @@ return (
           {results.length > 0 && !isProcessing && (progress === 100 || resultCount > 0) && (
             <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
               <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
-              {progress < 100 && (
+              {progress < 100 && !isAutoResuming && (
                 <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
                   <p className="text-amber-700">
                     <span className="font-medium">Note:</span> Showing partial results ({results.length} companies) after cancellation.

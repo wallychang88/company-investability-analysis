@@ -388,7 +388,7 @@ const fd = new FormData();
       xhr.send(body);
     });
 
-/* ─────────── Merge payload from server ─────────── */
+/* ─────────── Modified payload handler with auto-resume ─────────── */
 const handlePayload = (data) => {
   if (!data) return;
   
@@ -399,16 +399,26 @@ const handlePayload = (data) => {
   
   // Handle timeout status from the server
   if (data.status === 'timeout') {
-    console.log("Server timeout detected, enabling resume capability");
-    setCanResume(true);
+    console.log("Server timeout detected, enabling auto-resume capability");
     setResumeState({
       progress: data.progress || 0,
       totalRows: data.total_rows || parsedData.length
     });
-    setLastError("Processing timed out but can be resumed");
+    
+    // Instead of just displaying a message, automatically trigger resume
+    // Add a small delay to ensure the UI reflects the current state before resuming
+    setTimeout(() => {
+      console.log(`Auto-resuming processing from row ${data.progress}`);
+      processData(data.progress);
+    }, 1500);
+    
+    // Still set canResume in case auto-resume fails and manual intervention is needed
+    setCanResume(true);
+    setLastError("Processing timed out. Auto-resuming...");
     return;
   }
   
+  // Rest of the existing handlePayload code...
   // Handle status updates
   if (data.status === 'starting' || data.status === 'resuming') {
     console.log(`Analysis ${data.status} with ${data.total_rows} total rows`);
@@ -1033,16 +1043,33 @@ return (
           </section>
         )}
 
-{/* Add this to your UI, perhaps under the progress */}
+{/* Replace the existing manual resume section with this auto-resume section */}
 {canResume && !isProcessing && (
   <div className="text-center mt-4">
     <p className="text-amber-600 mb-2">Processing timed out due to Vercel's 60-second limit.</p>
-    <button
-      onClick={() => processData(resumeState.progress)}
-      className="px-6 py-3 bg-navy-600 text-white font-medium rounded-lg hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-300 shadow-md"
-    >
-      Resume Processing from Row {resumeState.progress}
-    </button>
+    <div className="flex flex-col items-center">
+      <p className="text-navy-700 mb-2">
+        <span className="animate-pulse">⟳</span> Auto-resuming from row {resumeState.progress}...
+      </p>
+      <button
+        onClick={() => processData(resumeState.progress)}
+        className="px-6 py-3 bg-navy-600 text-white font-medium rounded-lg hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-300 shadow-md"
+      >
+        Manually Resume If Needed
+      </button>
+    </div>
+  </div>
+)}
+
+{/* Add a timeout notification banner when auto-resuming */}
+{isProcessing && resumeState.progress > 0 && (
+  <div className="mb-4 p-3 bg-navy-50 border border-navy-200 rounded-lg">
+    <p className="text-navy-700 flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-navy-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      Auto-resumed processing from row {resumeState.progress} of {resumeState.totalRows}
+    </p>
   </div>
 )}
 

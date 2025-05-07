@@ -113,22 +113,28 @@ def score_batch(
         
         # Get company name from the designated company_name field only
         name_col = column_map.get("company_name", "")
+        
+        # Get description field separately (not for company name)
+        desc_col = column_map.get("description", "")
+        description = row[desc_col] if desc_col and desc_col in row else ''
             
-        # Safe row access
+        # Safe row access for company name
         company_name = ""
         if name_col and name_col in row:
             company_name = row[name_col]
             
-        # Use placeholder for blank company names
-        if not company_name or company_name.strip() == "":
-            company_name = f"NAME FIELD BLANK (Row {idx+1})"
+        # For OpenAI prompt - create display name with placeholder for empty names
+        display_name = company_name
+        if not display_name or display_name.strip() == "":
+            display_name = f"NAME FIELD BLANK (Row {idx+1})"
             
-        print(f"Using company name: '{company_name}'")
+        print(f"Using company name: '{display_name}'")
         
-        company_names.append(company_name)  # Store exact name for later matching
+        # Store the original name for matching
+        company_names.append(company_name)
         
         # Start with mandatory fields - more concise format
-        company_data = [f"Company: {company_name}"]
+        company_data = [f"Company: {display_name}"]
         
         # Add mandatory fields
         emp_col = column_map.get('employee_count', '')
@@ -142,28 +148,24 @@ def score_batch(
         latest_raised_col = column_map.get('latest_raised', '')
         recent_investment_col = column_map.get('date_of_most_recent_investment', '')
         
-        # Get description field for data 
-        desc_col = column_map.get("description", "")
-        description = row[desc_col] if desc_col in row else ''
-        
         # Safe data access with existence check for each column
         fields = {
-            "Employee Count": row[emp_col] if emp_col in row else '',
+            "Employee Count": row[emp_col] if emp_col and emp_col in row else '',
             "Description": description,
-            "Industries": truncate_text(row[ind_col] if ind_col in row else '', 200),
-            "Specialties": truncate_text(row[spec_col] if spec_col in row else '', 200),
-            "Products/Services": truncate_text(row[prod_col] if prod_col in row else '', 200),
-            "End Markets": truncate_text(row[end_col] if end_col in row else '', 200),
-            "Country": row[country_col] if country_col in row else '',
-            "Ownership": row[ownership_col] if ownership_col in row else '',
-            "Total Raised": row[total_raised_col] if total_raised_col in row else '',
-            "Latest Raised": row[latest_raised_col] if latest_raised_col in row else '',
-            "Date of Most Recent Investment": row[recent_investment_col] if recent_investment_col in row else ''
+            "Industries": truncate_text(row[ind_col] if ind_col and ind_col in row else '', 200),
+            "Specialties": truncate_text(row[spec_col] if spec_col and spec_col in row else '', 200),
+            "Products/Services": truncate_text(row[prod_col] if prod_col and prod_col in row else '', 200),
+            "End Markets": truncate_text(row[end_col] if end_col and end_col in row else '', 200),
+            "Country": row[country_col] if country_col and country_col in row else '',
+            "Ownership": row[ownership_col] if ownership_col and ownership_col in row else '',
+            "Total Raised": row[total_raised_col] if total_raised_col and total_raised_col in row else '',
+            "Latest Raised": row[latest_raised_col] if latest_raised_col and latest_raised_col in row else '',
+            "Date of Most Recent Investment": row[recent_investment_col] if recent_investment_col and recent_investment_col in row else ''
         }
         
         # Add each field if it has content
         for label, value in fields.items():
-            if value and value.strip():
+            if value and str(value).strip():
                 company_data.append(f"{label}: {value}")
         
         # Add optional fields if they're mapped and have content

@@ -64,7 +64,7 @@ def build_system_prompt(criteria: str) -> str:
     5. Experienced management teams with domain expertise
     6. Annual growth rates typically exceeding 15%
     
-    SCORING GUIDELINES:
+    IMPORTANT SCORING GUIDELINES:
     - Companies with <80 employees should receive scores no higher than 5
     - Companies with >1000 employees should receive scores no higher than 3
     - Companies with >5000 employees should receive scores no higher than 2
@@ -93,7 +93,7 @@ def build_system_prompt(criteria: str) -> str:
     Products/Services: Software Applications and Web-Based Platforms
     End Markets: Healthcare, Industrials, Business Services, Finance
     Employee Count: 927
-    Score: 8
+    Score: 9
     Rationale: Risk management solution, appropriate size, enterprise customers
     
     Example 3: LegalSifter
@@ -113,7 +113,7 @@ def build_system_prompt(criteria: str) -> str:
     Products/Services: Contracting Services
     End Markets: Business Services, Healthcare, Education, Consumer Services
     Employee Count: 186
-    Score: 7
+    Score: 9
     Rationale: HR tech focus, appropriate size, scalable solution
     
     Example 5: DailyPay
@@ -123,7 +123,7 @@ def build_system_prompt(criteria: str) -> str:
     Products/Services: Financial Services
     End Markets: Business Services, Healthcare
     Employee Count: 928
-    Score: 7
+    Score: 8
     Rationale: Innovative fintech, appropriate size, strong growth potential
     
     """

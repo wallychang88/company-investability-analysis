@@ -34,11 +34,7 @@ export default function VCAnalysisTool() {
   const [columnMap, setColumnMap] = useState({});
   const [investCriteria, setInvestCriteria] = useState(
   `We invest in: 
-  • Enterprise B2B SaaS and software-enabled service companies
-  • Companies with 80-350 employees
-  • Based in the US, UK, Canada, or Israel
-  • Have raised between $5M and $150M in total
-  • Ownership is private, venture capital, private equity, or seed`
+  • Enterprise B2B SaaS and software-enabled service companies...`
   );
   const [criteriaWeights, setCriteriaWeights] = useState([]); // [{id,label,weight}]
   const abortRef = useRef(null);

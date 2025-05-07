@@ -119,8 +119,8 @@ def score_batch(
         company_name = ""
         if name_col and name_col in row:
             company_name = row[name_col]
-        if not company_name and desc_col and desc_col in row:
-            company_name = row[desc_col]
+        if not company_name:
+            company_name = "blank"
             
         print(f"Using company name: '{company_name}'")
         

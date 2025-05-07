@@ -623,7 +623,7 @@ const downloadCSV = () => {
     </div>
   );
 
-  /* Top 5 table with enhanced display */
+ /* Top 5 table with enhanced display */
 const TopTable = () => {
   // Get matched company data (combines results with original data)
   const topCompanies = useMemo(() => {
@@ -634,25 +634,28 @@ const TopTable = () => {
     return results
       .slice()
       .sort((a, b) => b.investability_score - a.investability_score)
-      .map(result => {
+      .map((result, index) => {
         // Get the company name from the result
         const companyName = result.company_name;
+        
+        // Check if company name is blank/empty
+        const isNameBlank = !companyName || companyName.trim() === '';
         
         // Find the original company data using multiple matching strategies
         let originalData = null;
         
         // First try exact match on description field
-        if (columnMap.description) {
+        if (!isNameBlank && columnMap.description) {
           originalData = parsedData.find(row => row[columnMap.description] === companyName);
         }
         
         // If no match, try exact match on company_name field
-        if (!originalData && columnMap.company_name) {
+        if (!originalData && !isNameBlank && columnMap.company_name) {
           originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
         }
         
         // If still no match, try case-insensitive contains match
-        if (!originalData && columnMap.description) {
+        if (!originalData && !isNameBlank && columnMap.description) {
           originalData = parsedData.find(row => {
             const desc = row[columnMap.description];
             return desc && desc.toLowerCase().includes(companyName.toLowerCase());
@@ -660,7 +663,7 @@ const TopTable = () => {
         }
         
         // If still no match, try case-insensitive match on any column
-        if (!originalData) {
+        if (!originalData && !isNameBlank) {
           originalData = parsedData.find(row => {
             return Object.values(row).some(value => 
               value && typeof value === 'string' && 
@@ -699,8 +702,13 @@ const TopTable = () => {
           ? originalData[columnMap.employee_count]
           : 'N/A';
         
+        // For blank company names, use "NAME FIELD BLANK (Row #)" format
+        const displayName = isNameBlank 
+          ? `NAME FIELD BLANK (Row ${index + 1})` 
+          : companyName;
+        
         return {
-          name: companyName,
+          name: displayName,
           foundingYear,
           employeeCount,
           website: formattedUrl,

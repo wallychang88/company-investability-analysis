@@ -301,8 +301,8 @@ const processData = async (resumeFrom = 0) => {
       resultCount: 0,
       results: [],
       canResume: false,
-      // Keep isAutoResuming as is
       wasCancelled: false,  // Reset wasCancelled flag
+      inTransition: true    // Start with transition mode on
     }));
   } else {
     // Resuming from a point - keep results but update processing flag
@@ -311,7 +311,7 @@ const processData = async (resumeFrom = 0) => {
       ...prev,
       isProcessing: true,
       canResume: false,
-      // Keep other values
+      // Do NOT change inTransition here - it should already be true
     }));
   }
 
@@ -386,17 +386,17 @@ const processData = async (resumeFrom = 0) => {
     }
   } 
   finally {
-  // Check if a timeout was received while processing
-  // This helps prevent state inconsistencies by not resetting flags prematurely
-  if (!processingState.isAutoResuming) {
-    setProcessingState(prev => ({
-      ...prev,
-      isProcessing: false,
-      isAutoResuming: false,
-      inTransition: false
-    }));
+    // Check if a timeout was received while processing
+    // Only reset flags if we're not in auto-resume mode
+    if (!processingState.isAutoResuming) {
+      setProcessingState(prev => ({
+        ...prev,
+        isProcessing: false,
+        inTransition: false
+        // Do NOT reset isAutoResuming here
+      }));
+    }
   }
-}
 };
 
   /* ─────────── Stream reader (NDJSON) ─────────── */
@@ -484,46 +484,47 @@ const handlePayload = (data) => {
     return;
   }
 
-  // Handle timeout status
+  // Handle timeout status - this is the critical path for auto-resume
   if (data.status === 'timeout') {
-  console.log("Server timeout detected, enabling auto-resume capability");
-  const progress = data.progress || 0;
-  const totalRows = data.total_rows || parsedData.length;
-  
-  // First, set transition flag immediately to prevent UI flickering
-  setProcessingState(prev => ({
-    ...prev,
-    inTransition: true // Mark that we're in a transition period
-  }));
-  
-  // Short delay to ensure transition state is applied
-  setTimeout(() => {
-    // Update all processing flags in a single atomic update
+    console.log("Server timeout detected, enabling auto-resume capability");
+    const progress = data.progress || 0;
+    const totalRows = data.total_rows || parsedData.length;
+    
+    // CRITICAL: Set inTransition flag first and keep it throughout the entire process
     setProcessingState(prev => ({
       ...prev,
-      isProcessing: true,
-      isAutoResuming: true,
-      inTransition: false, // No longer in transition, now in auto-resume
-      canResume: true,
-      lastError: null,
-      wasCancelled: false,  // Ensure wasCancelled is false during auto-resume
-      resumeState: {
-        progress: progress,
-        totalRows: totalRows
-      }
+      inTransition: true // Lock the UI in its current state
     }));
     
-    // Add auto-resume functionality with a further delay
+    // Short delay to ensure transition state is applied
     setTimeout(() => {
-      console.log(`Auto-resuming processing from row ${progress}`);
+      // Prepare for auto-resume while keeping inTransition true
+      setProcessingState(prev => ({
+        ...prev,
+        isProcessing: true,
+        isAutoResuming: true,
+        // Keep inTransition true to prevent UI changes
+        canResume: true,
+        lastError: null,
+        wasCancelled: false,
+        resumeState: {
+          progress: progress,
+          totalRows: totalRows
+        }
+      }));
       
-      // Don't update state here - just call processData directly
-      processData(progress);
-    }, 2000);
-  }, 100); // Make sure this closing bracket and timeout value is here
-  
-  return;
-}
+      // Add auto-resume functionality with a further delay
+      setTimeout(() => {
+        console.log(`Auto-resuming processing from row ${progress}`);
+        
+        // Don't update state here - just call processData directly
+        // inTransition will remain true until completion
+        processData(progress);
+      }, 2000);
+    }, 50);
+    
+    return;
+  }
   
   // Handle status updates
   if (data.status === 'starting' || data.status === 'resuming') {
@@ -581,50 +582,49 @@ const handlePayload = (data) => {
   }
   
   // Handle progress updates
-    if (typeof data.progress === "number") {
-      // Update all progress-related state in a single atomic update
-      setProcessingState(prev => {
-        const totalForCalc = data.total_rows || prev.resumeState.totalRows || parsedData.length;
-        
-        // More precise progress calculation
-        let progressPercent;
-        if (data.progress >= totalForCalc) {
-          progressPercent = 100; // Exactly 100% when all rows are processed
-        } else {
-          // Only go up to 99.9% until completely finished
-          progressPercent = Math.min(99.9, Math.round((data.progress / totalForCalc) * 1000) / 10);
+  if (typeof data.progress === "number") {
+    // Update all progress-related state in a single atomic update
+    setProcessingState(prev => {
+      const totalForCalc = data.total_rows || prev.resumeState.totalRows || parsedData.length;
+      
+      // More precise progress calculation
+      let progressPercent;
+      if (data.progress >= totalForCalc) {
+        progressPercent = 100; // Exactly 100% when all rows are processed
+      } else {
+        // Only go up to 99.9% until completely finished
+        progressPercent = Math.min(99.9, Math.round((data.progress / totalForCalc) * 1000) / 10);
+      }
+      
+      return {
+        ...prev,
+        resultCount: data.progress,
+        progress: progressPercent,
+        resumeState: {
+          ...prev.resumeState,
+          progress: data.progress
         }
-        
-        return {
-          ...prev,
-          resultCount: data.progress,
-          progress: progressPercent,
-          resumeState: {
-            ...prev.resumeState,
-            progress: data.progress
-          }
       };
     });
   }
-// Check for completion - add this new block after the progress update code
-if (data.status === 'complete' || data.status === 'finished' || 
-    (typeof data.progress === "number" && 
-     data.progress >= (data.total_rows || processingState.resumeState.totalRows || parsedData.length))) {
   
-  console.log("Processing complete, ensuring all results are included");
-  
-  // Set a small delay to ensure all results have been processed before updating UI
-  setTimeout(() => {
+  // Check for completion - ONLY reset ALL processing flags at the end
+  if (data.status === 'complete' || data.status === 'finished' || 
+      (typeof data.progress === "number" && 
+      data.progress >= (data.total_rows || processingState.resumeState.totalRows || parsedData.length))) {
+    
+    console.log("Processing complete, resetting all state flags");
+    
+    // Reset ALL processing flags in one atomic update
     setProcessingState(prev => ({
       ...prev,
       progress: 100,
       isProcessing: false,
       isAutoResuming: false,
+      inTransition: false, // Safe to reset now that everything is done
       allResultsProcessed: true
     }));
-  }, 500); // Short delay to ensure all chunks are processed
-}
-  
+  }
 };
 
      /* ─────────── Download CSV helper ─────────── */
@@ -1158,89 +1158,88 @@ return (
         </section>
 
         {/* Analyze */}
-        <div className="text-center mb-8">
-          {parsedData.length > 0 ? (
-            <button
-              onClick={processData}
-              disabled={processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition}
-              className="px-8 py-4 bg-navy-800 text-white text-lg font-medium rounded-xl hover:bg-navy-900 disabled:opacity-50 shadow-lg"
-            >
-              {(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) ? "Processing…" : "Analyze Companies"}
-            </button>
-          ) : file ? (
-            <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>
-          ) : (
-            <p className="text-sm text-gray-600">Upload a CSV file to begin analysis</p>
-          )}
-        </div>
+<div className="text-center mb-8">
+  {parsedData.length > 0 && !processingState.results.length ? (
+    <button
+      onClick={processData}
+      disabled={processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition}
+      className="px-8 py-4 bg-navy-800 text-white text-lg font-medium rounded-xl hover:bg-navy-900 disabled:opacity-50 shadow-lg"
+    >
+      {(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) ? "Processing…" : "Analyze Companies"}
+    </button>
+  ) : file && !parsedData.length ? (
+    <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>
+  ) : !file ? (
+    <p className="text-sm text-gray-600">Upload a CSV file to begin analysis</p>
+  ) : null}
+</div>
 
-        {/* Progress */}
-          {(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) && (
-            <section 
-              ref={progressSectionRef}
-              className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4"
-            >
-              <h2 className="text-xl font-semibold text-navy-800">Processing Companies</h2>
-              <div className="flex items-center justify-between text-xs font-semibold text-navy-600">
-                <span>Progress</span>
-                <span>
-                  {processingState.resultCount} / {parsedData.length}
-                </span>
-              </div>
-              <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-navy-600 transition-all duration-500"
-                  style={{ width: `${processingState.progress}%` }}
-                />
-              </div>
-              <p className="text-center text-sm text-gray-500">
-                {processingState.progress < 100 ? "Analyzing…" : "Analysis complete!"}
-              </p>
-              {/* Always show Cancel button, removed the isProcessing condition */}
-              <button
-                onClick={() => {
-                  if (abortRef.current) {
-                    abortRef.current.abort();
-                    setProcessingState(prev => ({
-                      ...prev,
-                      wasCancelled: true,
-                      isProcessing: false, // Immediately stop processing UI
-                      isAutoResuming: false // Ensure auto-resume is also stopped
-                    }));
-                  }
-                }}
-                className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
-              >
-                Cancel
-              </button>
-            </section>
-          )}
+{/* Progress */}
+{(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) && (
+  <section 
+    ref={progressSectionRef}
+    className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4"
+  >
+    <h2 className="text-xl font-semibold text-navy-800">Processing Companies</h2>
+    <div className="flex items-center justify-between text-xs font-semibold text-navy-600">
+      <span>Progress</span>
+      <span>
+        {processingState.resultCount} / {parsedData.length}
+      </span>
+    </div>
+    <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden">
+      <div
+        className="h-full bg-navy-600 transition-all duration-500"
+        style={{ width: `${processingState.progress}%` }}
+      />
+    </div>
+    <p className="text-center text-sm text-gray-500">
+      {processingState.progress < 100 ? "Analyzing…" : "Analysis complete!"}
+    </p>
+    <button
+      onClick={() => {
+        if (abortRef.current) {
+          abortRef.current.abort();
+          setProcessingState(prev => ({
+            ...prev,
+            wasCancelled: true,
+            isProcessing: false,
+            isAutoResuming: false,
+            inTransition: false // Reset transition state on cancel
+          }));
+        }
+      }}
+      className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+    >
+      Cancel
+    </button>
+  </section>
+)}
 
-        {/* Results - Show when processing is complete OR when user cancels with some results */}
-         {processingState.results.length > 0 && 
-              !(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) &&
-              ((processingState.progress === 100 && processingState.allResultsProcessed) || processingState.wasCancelled) && (
-              <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
-                <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
-                {processingState.wasCancelled && processingState.progress < 100 && (
-                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
-                    <p className="text-amber-700">
-                      <span className="font-medium">Note:</span> Showing partial results ({processingState.results.length} companies) after cancellation.
-                    </p>
-                  </div>
-                )}
-                <TopTable results={processingState.results} />
-                <Histogram results={processingState.results} />
-                <div className="text-center">
-                  <button
-                    onClick={downloadCSV}
-                    className="mt-4 px-6 py-3 bg-navy-700 text-white font-medium rounded-lg hover:bg-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-500 shadow-md"
-                  >
-                    Download Results CSV
-                  </button>
-                </div>
-              </section>
-            )}
+{/* Results - Simplified conditions to prevent flickering */}
+{processingState.results.length > 0 && 
+  !(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) && (
+  <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
+    <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
+    {processingState.wasCancelled && processingState.progress < 100 && (
+      <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
+        <p className="text-amber-700">
+          <span className="font-medium">Note:</span> Showing partial results ({processingState.results.length} companies) after cancellation.
+        </p>
+      </div>
+    )}
+    <TopTable results={processingState.results} />
+    <Histogram results={processingState.results} />
+    <div className="text-center">
+      <button
+        onClick={downloadCSV}
+        className="mt-4 px-6 py-3 bg-navy-700 text-white font-medium rounded-lg hover:bg-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-500 shadow-md"
+      >
+        Download Results CSV
+      </button>
+    </div>
+  </section>
+)}
       </div>
     </div>
   );

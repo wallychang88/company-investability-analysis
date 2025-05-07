@@ -665,6 +665,11 @@ def analyze_endpoint():
         except json.JSONDecodeError as e:
             print(f"Warning: Invalid weights JSON: {str(e)}")
     
+    # Process resume information if provided
+    resume_from = int(request.form.get("resumeFrom", "0"))
+    if resume_from > 0:
+        print(f"Request to resume from row {resume_from}")
+    
     # Read the file into memory to prevent "I/O operation on closed file" error
     print("Reading uploaded file into memory...")
     uploaded_file = request.files["file"]
@@ -674,15 +679,25 @@ def analyze_endpoint():
     csv_data = BytesIO(file_content)
     
     print("Starting analysis stream...")
-    ndjson_stream = stream_analysis(csv_data, column_map, criteria)
+    ndjson_stream = stream_analysis(csv_data, column_map, criteria, resume_from=resume_from)
     
     # Set a max execution time for Vercel's 60-second limit
-    # This will ensure we send a response before the function times out
     def timeout_generator(generator, max_time=50):  # 50 seconds to be safe
         start_time = time.time()
+        last_progress = 0  # Track last known progress
         
         # Try to process as much as possible within the time limit
         for item in generator:
+            # Extract progress from yielded items if possible
+            try:
+                data = json.loads(item.strip())
+                if "progress" in data:
+                    last_progress = data["progress"]
+                if "total_rows" in data:
+                    total_rows = data["total_rows"]
+            except:
+                pass
+                
             yield item
             
             # Check if we're approaching the time limit
@@ -690,20 +705,18 @@ def analyze_endpoint():
                 # Send a special message indicating we're timing out
                 timeout_msg = json.dumps({
                     "status": "timeout",
-                    "message": "Processing continued in background. Reload to see results.",
-                    "progress": processed  # Use the last processed count
+                    "message": "Processing timeout reached. You can resume from where processing stopped.",
+                    "progress": last_progress,
+                    "total_rows": total_rows if 'total_rows' in locals() else 0
                 }) + "\n"
                 yield timeout_msg
                 break
     
-    # Start the analysis but wrap with timeout handling
-    csv_data = BytesIO(file_content)
-    ndjson_stream = stream_analysis(csv_data, column_map, criteria)
+    # Wrap the stream with timeout handling
     timeout_stream = timeout_generator(ndjson_stream)
     
     print("Returning streaming response")
     return Response(timeout_stream, mimetype="application/x-ndjson")
-
 
 # Add a health check endpoint for front-end connectivity testing
 @app.route("/api/health", methods=["GET"])

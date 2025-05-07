@@ -623,7 +623,7 @@ const downloadCSV = () => {
     </div>
   );
 
- /* Top 5 table with enhanced display */
+/* Top 5 table with enhanced display */
 const TopTable = () => {
   // Get matched company data (combines results with original data)
   const topCompanies = useMemo(() => {
@@ -636,39 +636,26 @@ const TopTable = () => {
       .sort((a, b) => b.investability_score - a.investability_score)
       .map((result, index) => {
         // Get the company name from the result
-        const companyName = result.company_name;
+        let companyName = result.company_name;
         
-        // Need to check if we have a REAL company name by checking original data
-        let originalRow = null;
-        
-        // Try to find the original row this result came from
-        if (columnMap.company_name) {
-          originalRow = parsedData.find(row => row[columnMap.company_name] === companyName);
-        }
-        
-        // Check if this is actually from the company name field, or if the backend used description as fallback
-        const hasRealCompanyName = !!(originalRow && columnMap.company_name);
-        
-        // Consider company name blank if:
-        // 1. The name itself is blank, OR
-        // 2. We couldn't find this exact name in the company_name column (meaning backend used description instead)
-        const isNameBlank = !companyName || companyName.trim() === '' || !hasRealCompanyName;
+        // Check if company name is blank/empty (marked as "blank" by the backend)
+        const isNameBlank = !companyName || companyName.trim() === '' || companyName === "blank";
         
         // Find the original company data using multiple matching strategies
         let originalData = null;
         
         // First try exact match on description field
-        if (!isNameBlank && columnMap.description) {
+        if (columnMap.description) {
           originalData = parsedData.find(row => row[columnMap.description] === companyName);
         }
         
         // If no match, try exact match on company_name field
-        if (!originalData && !isNameBlank && columnMap.company_name) {
+        if (!originalData && columnMap.company_name) {
           originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
         }
         
         // If still no match, try case-insensitive contains match
-        if (!originalData && !isNameBlank && columnMap.description) {
+        if (!originalData && columnMap.description) {
           originalData = parsedData.find(row => {
             const desc = row[columnMap.description];
             return desc && desc.toLowerCase().includes(companyName.toLowerCase());
@@ -676,7 +663,7 @@ const TopTable = () => {
         }
         
         // If still no match, try case-insensitive match on any column
-        if (!originalData && !isNameBlank) {
+        if (!originalData) {
           originalData = parsedData.find(row => {
             return Object.values(row).some(value => 
               value && typeof value === 'string' && 
@@ -716,7 +703,6 @@ const TopTable = () => {
           : 'N/A';
         
         // For blank company names, use "NAME FIELD BLANK (Row #)" format
-        // The row number corresponds to the index in the results array + 1 (for 1-based indexing)
         const displayName = isNameBlank 
           ? `NAME FIELD BLANK (Row ${index + 1})` 
           : companyName;

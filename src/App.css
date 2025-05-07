@@ -1,4 +1,18 @@
-/* App.css - Basic styles for Company Investability Analysis tool */
+/* App.css - Carrick Capital Partners Theme */
+
+/* Define Carrick theme colors as CSS variables */
+:root {
+  --navy-50: #f0f4f8;
+  --navy-100: #d9e2ed;
+  --navy-200: #b3c6db;
+  --navy-300: #84a0c0;
+  --navy-400: #5a7ca5;
+  --navy-500: #3c5d85;
+  --navy-600: #2d4563;
+  --navy-700: #233548;
+  --navy-800: #1a2533;
+  --navy-900: #111927;
+}
 
 /* Progress bar styling */
 progress {
@@ -7,20 +21,20 @@ progress {
 }
 
 progress::-webkit-progress-bar {
-  background-color: #f3f4f6;
+  background-color: var(--navy-100);
   border-radius: 0.25rem;
 }
 
 progress::-webkit-progress-value {
-  background-color: #3b82f6;
+  background-color: var(--navy-600);
   border-radius: 0.25rem;
 }
 
 /* Custom file input styling */
 input[type="file"]::file-selector-button {
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background-color: var(--navy-100);
+  color: var(--navy-700);
+  border: 1px solid var(--navy-200);
   padding: 0.5rem 1rem;
   border-radius: 0.25rem;
   cursor: pointer;
@@ -28,7 +42,7 @@ input[type="file"]::file-selector-button {
 }
 
 input[type="file"]::file-selector-button:hover {
-  background-color: #e5e7eb;
+  background-color: var(--navy-200);
 }
 
 /* Table styling */
@@ -37,5 +51,83 @@ input[type="file"]::file-selector-button:hover {
 }
 
 .table-row:hover {
-  background-color: #f3f4f6;
+  background-color: var(--navy-50);
+}
+
+/* Button styling */
+button {
+  transition: all 0.2s;
+}
+
+button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(60, 93, 133, 0.3);
+}
+
+/* Range input styling */
+input[type="range"] {
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, var(--navy-400), var(--navy-600));
+  border-radius: 8px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--navy-700);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--navy-700);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Form controls styling */
+select, textarea {
+  transition: all 0.2s;
+}
+
+select:focus, textarea:focus {
+  border-color: var(--navy-500);
+  box-shadow: 0 0 0 3px rgba(60, 93, 133, 0.2);
+}
+
+/* Card and container styling */
+.rounded-lg {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+section.border {
+  border-color: var(--navy-100);
+}
+
+/* Header styling */
+header h1, header h2 {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Carrick logo styling - if you add a logo */
+.carrick-logo {
+  max-height: 60px;
+  margin-bottom: 1rem;
+}
+
+/* Add a subtle pattern background */
+.bg-pattern {
+  background-color: #f7f9fc;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%233c5d85' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }

@@ -71,7 +71,7 @@ def build_system_prompt(criteria: str) -> str:
     - Companies with >10000 employees should receive a score of 0-1
     - Companies with missing critical data (e.g., N/A for employee count) should receive scores no higher than 4
     - Companies with clear mismatches to our investment thesis should receive scores of 0-3
-    - Only companies that strongly match our criteria should receive scores of 8-10
+    - Only companies that strongly match our criteria should receive scores of 7-10
     """
     
     # Example companies from portfolio that represent ideal investments

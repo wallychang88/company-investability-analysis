@@ -48,8 +48,12 @@ export default function VCAnalysisTool() {
   const [resultCount, setResultCount] = useState(0);
   const [results, setResults] = useState([]);
   const [lastError, setLastError] = useState(null); // For error state
-
   const abortRef = useRef(null);
+  const [canResume, setCanResume] = useState(false);
+  const [resumeState, setResumeState] = useState({
+  progress: 0,
+  totalRows: 0
+});
 
   /* ───────── Parse bullet list → criteriaWeights ───────── */
   useEffect(() => {
@@ -183,13 +187,13 @@ export default function VCAnalysisTool() {
   }, [results]);
 
   /* ─────────── API Call ─────────── */
-  const processData = async () => {
-    setLastError(null);
-    
-    if (!file) {
-      setLastError("Upload a file first");
-      return;
-    }
+const processData = async (resumeFrom = 0) => {
+  setLastError(null);
+  
+  if (!file) {
+    setLastError("Upload a file first");
+    return;
+  }
 
     // Validate required mappings
     const missing = REQUIRED_COLS.filter((c) => !columnMap[c]);
@@ -217,10 +221,15 @@ export default function VCAnalysisTool() {
     }
 
     // Begin processing
-    setIsProcessing(true);
+setIsProcessing(true);
+  if (resumeFrom === 0) {
+    // Only reset progress if starting from beginning
     setProgress(0);
     setResultCount(0);
     setResults([]);
+  } else {
+    console.log(`Resuming processing from row ${resumeFrom}`);
+  }
 
     // Abort controller for multiple runs
     if (abortRef.current) {
@@ -233,10 +242,15 @@ export default function VCAnalysisTool() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("columnMap", JSON.stringify(columnMap));
-    fd.append("criteria", investCriteria);
+const fd = new FormData();
+  fd.append("file", file);
+  fd.append("columnMap", JSON.stringify(columnMap));
+  fd.append("criteria", investCriteria);
+  
+  // Add resume information if resuming
+  if (resumeFrom > 0) {
+    fd.append("resumeFrom", resumeFrom.toString());
+  }
     
     // Add weights if available
     if (criteriaWeights.length > 0) {
@@ -249,33 +263,35 @@ export default function VCAnalysisTool() {
     }
 
     try {
-      
-      const res = await fetch("/api/analyze", { 
-        method: "POST", 
-        body: fd, 
-        signal: controller.signal 
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`API error (${res.status}): ${errorText || res.statusText}`);
-      }
-
-      if (res.body && typeof res.body.getReader === 'function') {
-        await readStream(res.body.getReader());
-      } else {
-        // Safari ≤17 fallback
-        await readStreamXHR(fd, controller.signal);
-      }
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        console.error("Analysis error:", err);
-        setLastError(err.message || "Unknown error");
-      }
-    } finally {
-      setIsProcessing(false);
+    const res = await fetch("/api/analyze", { 
+      method: "POST", 
+      body: fd, 
+      signal: controller.signal 
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`API error (${res.status}): ${errorText || res.statusText}`);
     }
-  };
+
+    // Reset resume state since we're processing now
+    setCanResume(false);
+
+    if (res.body && typeof res.body.getReader === 'function') {
+      await readStream(res.body.getReader());
+    } else {
+      // Safari ≤17 fallback
+      await readStreamXHR(fd, controller.signal);
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      console.error("Analysis error:", err);
+      setLastError(err.message || "Unknown error");
+    }
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   /* ─────────── Stream reader (NDJSON) ─────────── */
   const readStream = async (reader) => {
@@ -359,7 +375,29 @@ const handlePayload = (data) => {
     return;
   }
   
-  if (Array.isArray(data.result)) {
+  // Handle timeout status from the server
+  if (data.status === 'timeout') {
+    console.log("Server timeout detected, enabling resume capability");
+    setCanResume(true);
+    setResumeState({
+      progress: data.progress || 0,
+      totalRows: data.total_rows || parsedData.length
+    });
+    setLastError("Processing timed out but can be resumed");
+    return;
+  }
+  
+  // Handle status updates
+  if (data.status === 'starting' || data.status === 'resuming') {
+    console.log(`Analysis ${data.status} with ${data.total_rows} total rows`);
+    // Update total rows if provided
+    if (data.total_rows) {
+      setResumeState(prev => ({...prev, totalRows: data.total_rows}));
+    }
+  }
+  
+  // Handle chunk status
+  if (data.status === 'chunk_complete' && Array.isArray(data.result)) {
     if (data.result.length > 0) {
       // Check for valid data before updating
       const validResults = data.result.filter(r => 
@@ -389,11 +427,21 @@ const handlePayload = (data) => {
     }
   }
   
+  // Regular array results (backward compatibility)
+  if (Array.isArray(data.result) && !data.status) {
+    // ... existing array handling code ...
+  }
+  
   if (typeof data.progress === "number") {
     // Always update progress counter for UX feedback
     setResultCount(data.progress);
     
-    const progressPercent = Math.min(100, Math.round((data.progress / parsedData.length) * 100));
+    // Update resume state
+    setResumeState(prev => ({...prev, progress: data.progress}));
+    
+    // Calculate progress percentage
+    const totalForCalc = data.total_rows || resumeState.totalRows || parsedData.length;
+    const progressPercent = Math.min(100, Math.round((data.progress / totalForCalc) * 100));
     setProgress(progressPercent);
   }
 };
@@ -902,6 +950,19 @@ const TopTable = () => {
             </button>
           </section>
         )}
+
+{/* Add this to your UI, perhaps under the progress */}
+{canResume && !isProcessing && (
+  <div className="text-center mt-4">
+    <p className="text-amber-600 mb-2">Processing timed out due to Vercel's 60-second limit.</p>
+    <button
+      onClick={() => processData(resumeState.progress)}
+      className="px-6 py-3 bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300 shadow-md"
+    >
+      Resume Processing from Row {resumeState.progress}
+    </button>
+  </div>
+)}
 
         {/* Results */}
         {results.length > 0 && !isProcessing && (

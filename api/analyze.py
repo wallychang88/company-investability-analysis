@@ -61,8 +61,6 @@ def build_system_prompt(criteria: str) -> str:
     2. Recurring revenue models with strong retention metrics
     3. Technology that addresses critical business needs with measurable ROI
     4. Solutions for underserved or rapidly growing market segments
-    5. Experienced management teams with domain expertise
-    6. Annual growth rates typically exceeding 15%
     
     IMPORTANT SCORING GUIDELINES:
     - Companies with <80 employees should receive scores no higher than 5
@@ -82,7 +80,7 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Data access governance, SOD monitoring, remediation, continuous controls monitoring, privilege access governance, application GRC, cloud security
     Products/Services: IT Services
     End Markets: Healthcare, Business Services, Education, Finance, Industrials, Government
-    Employee Count: 1276
+    Employee Count: 180
     Score: 9
     Rationale: Strong fit with cybersecurity focus, appropriate size, enterprise SaaS model
     
@@ -92,7 +90,7 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Regulatory strategy, compliance governance, financial crime compliance, due diligence, investigations, technology, analytics, artificial intelligence, supply chain risk management
     Products/Services: Software Applications and Web-Based Platforms
     End Markets: Healthcare, Industrials, Business Services, Finance
-    Employee Count: 927
+    Employee Count: 250
     Score: 9
     Rationale: Risk management solution, appropriate size, enterprise customers
     
@@ -102,7 +100,7 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Contract Management, Law, Natural Language Processing, Machine Learning, Artificial Intelligence, Legal, Contract Review, Document Review
     Products/Services: Software Applications and Web-Based Platforms
     End Markets: Healthcare, Business Services, Education, Industrials, Finance
-    Employee Count: 59
+    Employee Count: 85
     Score: 8
     Rationale: AI-driven legal tech, growing company, strong vertical focus
     
@@ -122,7 +120,7 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Finance as a service, on-demand finance, receivable factoring, financial wellness, fintech, technology
     Products/Services: Financial Services
     End Markets: Business Services, Healthcare
-    Employee Count: 928
+    Employee Count: 350
     Score: 8
     Rationale: Innovative fintech, appropriate size, strong growth potential
     

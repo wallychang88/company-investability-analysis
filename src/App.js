@@ -1066,7 +1066,7 @@ return (
 )}
 
         {/* Results - Show when processing is complete OR when user cancels with some results */}
-          {results.length > 0 && !isProcessing && (progress === 100 || resultCount > 0) && (
+          {results.length > 0 && !isProcessing && !isAutoResuming && (progress === 100 || resultCount > 0) && (
             <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
               <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
               {progress < 100 && !isAutoResuming && (

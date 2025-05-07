@@ -1157,17 +1157,15 @@ return (
           </div>
         </section>
 
-{/* Analyze */}
+        {/* Analyze */}
 <div className="text-center mb-8">
-  {parsedData.length > 0 ? (
+  {parsedData.length > 0 && !processingState.results.length ? (
     <button
       onClick={processData}
-      disabled={processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition || processingState.results.length > 0}
+      disabled={processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition}
       className="px-8 py-4 bg-navy-800 text-white text-lg font-medium rounded-xl hover:bg-navy-900 disabled:opacity-50 shadow-lg"
     >
-      {(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) 
-        ? "Processing…" 
-        : "Analyze Companies"}
+      {(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) ? "Processing…" : "Analyze Companies"}
     </button>
   ) : file && !parsedData.length ? (
     <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>

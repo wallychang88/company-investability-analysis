@@ -1088,7 +1088,7 @@ return (
 
         {/* 4. Criteria & weights */}
         <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-6">
-          <h2 className="text-xl font-semibold text-navy-800">Define Investing Criteria</h2>
+          <h2 className="text-xl font-semibold text-navy-800">Define Investing Criteria (editable, pre-filled with some typical criteria)</h2>
           <textarea
             value={investCriteria}
             onChange={(e) => setInvestCriteria(e.target.value)}

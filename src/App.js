@@ -627,6 +627,7 @@ const downloadCSV = () => {
   );
 
   /* Top 5 table with enhanced display */
+/* Top table with enhanced display */
 const TopTable = () => {
   // Get matched company data (combines results with original data)
   const topCompanies = useMemo(() => {
@@ -634,6 +635,19 @@ const TopTable = () => {
     if (results.length === 0) return [];
     
     console.log("Processing results for display table:", results.length, "total items");
+    
+    // Debug: Print the first few results to check for blank names
+    console.log("First 10 results:", results.slice(0, 10).map(r => ({ 
+      name: r.company_name, 
+      score: r.investability_score 
+    })));
+    
+    // Specifically look for blank company names in the results
+    const blankNames = results.filter(r => !r.company_name || r.company_name.trim() === '');
+    console.log("Blank company names found:", blankNames.length);
+    if (blankNames.length > 0) {
+      console.log("Example blank entry:", blankNames[0]);
+    }
     
     // Create a copy to avoid mutations and apply sorting
     const sortedResults = [...results].sort((a, b) => {
@@ -651,38 +665,45 @@ const TopTable = () => {
       // Get the company name from the result
       let companyName = result.company_name;
       
-      // Check if company name is blank/empty
-      const isNameBlank = !companyName || companyName.trim() === '';
+      // Check if company name is blank/empty - use explicit check to catch all cases
+      const isNameBlank = companyName === undefined || companyName === null || companyName === '' || companyName.trim() === '';
+      
+      if (isNameBlank) {
+        console.log(`Found blank name at index ${index}`);
+      }
       
       // Find the original company data using multiple matching strategies
       let originalData = null;
       
-      // First try exact match on description field
-      if (columnMap.description) {
-        originalData = parsedData.find(row => row[columnMap.description] === companyName);
-      }
-      
-      // If no match, try exact match on company_name field
-      if (!originalData && columnMap.company_name) {
-        originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
-      }
-      
-      // If still no match, try case-insensitive contains match
-      if (!originalData && columnMap.description) {
-        originalData = parsedData.find(row => {
-          const desc = row[columnMap.description];
-          return desc && desc.toLowerCase().includes(companyName.toLowerCase());
-        });
-      }
-      
-      // If still no match, try case-insensitive match on any column
-      if (!originalData) {
-        originalData = parsedData.find(row => {
-          return Object.values(row).some(value => 
-            value && typeof value === 'string' && 
-            value.toLowerCase().includes(companyName.toLowerCase())
-          );
-        });
+      // Only try to find original data if company name is not blank
+      if (!isNameBlank) {
+        // First try exact match on description field
+        if (columnMap.description) {
+          originalData = parsedData.find(row => row[columnMap.description] === companyName);
+        }
+        
+        // If no match, try exact match on company_name field
+        if (!originalData && columnMap.company_name) {
+          originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
+        }
+        
+        // If still no match, try case-insensitive contains match
+        if (!originalData && columnMap.description) {
+          originalData = parsedData.find(row => {
+            const desc = row[columnMap.description];
+            return desc && desc.toLowerCase().includes(companyName.toLowerCase());
+          });
+        }
+        
+        // If still no match, try case-insensitive match on any column
+        if (!originalData) {
+          originalData = parsedData.find(row => {
+            return Object.values(row).some(value => 
+              value && typeof value === 'string' && 
+              value.toLowerCase().includes(companyName.toLowerCase())
+            );
+          });
+        }
       }
       
       // Default to empty object if still no match
@@ -725,12 +746,17 @@ const TopTable = () => {
         foundingYear,
         employeeCount,
         website: formattedUrl,
-        score: result.investability_score
+        score: result.investability_score,
+        isBlank: isNameBlank  // Add flag to identify blank entries in the UI
       };
     });
   }, [results, parsedData, columnMap, headers]);
 
   console.log("Rendered companies count:", topCompanies.length);
+  
+  // Count blank names for verification
+  const blankCount = topCompanies.filter(c => c.isBlank).length;
+  console.log("Blank names in final results:", blankCount);
 
   return (
     <div>
@@ -754,8 +780,10 @@ const TopTable = () => {
                 </tr>
               ) : (
                 topCompanies.map((company, idx) => (
-                  <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{company.name}</td>
+                  <tr key={idx} className={company.isBlank ? "bg-yellow-50" : (idx % 2 ? "bg-gray-50" : "")}>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">
+                      {company.isBlank ? <span className="text-amber-600">{company.name}</span> : company.name}
+                    </td>
                     <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.foundingYear}</td>
                     <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.employeeCount}</td>
                     <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">
@@ -790,6 +818,11 @@ const TopTable = () => {
       {topCompanies.length > 0 && (
         <p className="mt-2 text-xs text-gray-500 text-right">
           Showing all {topCompanies.length} results. Scroll to see more.
+        </p>
+      )}
+      {blankCount > 0 && (
+        <p className="mt-2 text-xs text-amber-600 text-right">
+          Found {blankCount} company entries with blank names.
         </p>
       )}
     </div>

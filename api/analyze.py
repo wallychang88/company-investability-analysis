@@ -49,7 +49,7 @@ def build_system_prompt(criteria: str) -> str:
     
     - Enterprise B2B technology companies with strong SaaS or recurring revenue models
     - Companies specializing in: cybersecurity, identity management, data analytics, workflow automation, compliance solutions, healthcare technology, and fintech
-    - Firms with approximately 80-500 employees (STRICT REQUIREMENT - companies with >1000 employees should receive scores no higher than 3)
+    - Firms with approximately 80-500 employees (STRICT REQUIREMENT - companies with >850 employees should receive scores no higher than 3 and companies with <80 employees should receive scores no higher than a 5)
     - Primarily located in the US, with some investments in UK, Israel, and Canada
     - Companies that have typically raised between $5M and $150M in total funding
     - Strong emphasis on AI/ML, cloud infrastructure, and specialized industry solutions
@@ -65,6 +65,7 @@ def build_system_prompt(criteria: str) -> str:
     6. Annual growth rates typically exceeding 15%
     
     SCORING GUIDELINES:
+    - Companies with <80 employees should receive scores no higher than 5
     - Companies with >1000 employees should receive scores no higher than 3
     - Companies with >5000 employees should receive scores no higher than 2
     - Companies with >10000 employees should receive a score of 0-1

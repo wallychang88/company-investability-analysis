@@ -286,6 +286,142 @@ def score_batch(
         # Return companies with -1 scores instead of fallback scoring
         return [{"company_name": name, "investability_score": -1} for name in company_names]
 
+def normalize_csv(csv_content):
+    """
+    Normalize CSV content to ensure consistent delimiting.
+    Specially handles SourceScrub CSV files which have metadata rows followed by a header row.
+    
+    Args:
+        csv_content: The raw CSV content as bytes
+        
+    Returns:
+        BytesIO: A buffer containing the normalized CSV content
+    """
+    import io
+    import csv
+    from io import BytesIO
+    
+    print("Starting CSV normalization process...")
+    
+    # Create a normalized version of the CSV
+    normalized_buffer = BytesIO()
+    
+    try:
+        # Try to decode the content - handle encoding issues gracefully
+        try:
+            # First try UTF-8
+            text_content = csv_content.decode('utf-8')
+        except UnicodeDecodeError:
+            # Fall back to Latin-1 if UTF-8 fails
+            try:
+                text_content = csv_content.decode('latin-1')
+                print("Decoded using latin-1 encoding")
+            except:
+                # Last resort - replace invalid characters
+                text_content = csv_content.decode('utf-8', errors='replace')
+                print("Decoded with replacement characters")
+        
+        # Split the content into lines
+        lines = text_content.splitlines()
+        
+        # SourceScrub specific: First 4 lines are metadata, 5th line is header
+        metadata_lines = lines[:4] if len(lines) >= 4 else []
+        header_line = lines[4] if len(lines) > 4 else ""
+        data_lines = lines[5:] if len(lines) > 5 else []
+        
+        print(f"File has {len(lines)} lines total.")
+        print(f"Identified {len(metadata_lines)} metadata lines, 1 header line, and {len(data_lines)} data lines.")
+        
+        # Setup CSV writer for output
+        output = io.StringIO()
+        writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+        
+        # Process metadata lines (first 4 lines) - write as single-column rows
+        for line in metadata_lines:
+            writer.writerow([line])
+            print(f"Preserved metadata line: {line[:50]}..." if len(line) > 50 else line)
+        
+        # Determine the best delimiter for the header
+        delimiters = [',', '\t', ';', '|']
+        best_delimiter = ','  # Default
+        max_columns = 0
+        header_fields = []
+        
+        # Check which delimiter produces the most fields for the header line
+        for delimiter in delimiters:
+            # Create a CSV reader with this delimiter
+            test_reader = csv.reader([header_line], delimiter=delimiter)
+            fields = next(test_reader)
+            
+            print(f"Delimiter '{delimiter}' gives {len(fields)} fields for header")
+            
+            if len(fields) > max_columns:
+                max_columns = len(fields)
+                best_delimiter = delimiter
+                header_fields = fields
+        
+        print(f"Selected delimiter '{best_delimiter}' with {max_columns} columns")
+        
+        # Write the header with properly separated fields
+        writer.writerow(header_fields)
+        print(f"Processed header with {len(header_fields)} fields")
+        
+        # Process the data rows with the same delimiter
+        successful_rows = 0
+        problem_rows = 0
+        
+        for i, line in enumerate(data_lines):
+            try:
+                # Create a CSV reader with the best delimiter
+                row_reader = csv.reader([line], delimiter=best_delimiter)
+                fields = next(row_reader)
+                
+                # Ensure each row has the right number of fields
+                if len(fields) < max_columns:
+                    # Pad with empty fields if needed
+                    fields.extend([''] * (max_columns - len(fields)))
+                    print(f"Padded row {i+6} from {len(fields)} to {max_columns} fields")
+                elif len(fields) > max_columns:
+                    # Truncate if there are too many fields
+                    fields = fields[:max_columns]
+                    print(f"Truncated row {i+6} from {len(fields)} to {max_columns} fields")
+                
+                # Write the normalized row
+                writer.writerow(fields)
+                successful_rows += 1
+                
+                if i < 3:  # Print sample of first few rows
+                    print(f"Sample row {i+6}: Fields={len(fields)}, First few: {str(fields[:3])}")
+                    
+            except Exception as e:
+                print(f"Error processing row {i+6}: {str(e)}")
+                # For problematic rows, write as a single field
+                writer.writerow([line])
+                problem_rows += 1
+        
+        print(f"Processed {successful_rows} data rows successfully. {problem_rows} rows had issues.")
+        
+        # Get the resulting CSV content
+        csv_output = output.getvalue().encode('utf-8')
+        
+        # Write to the output buffer
+        normalized_buffer.write(csv_output)
+        normalized_buffer.seek(0)
+        
+        print("CSV normalization completed successfully")
+        return normalized_buffer
+        
+    except Exception as e:
+        print(f"Error during CSV normalization: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # In case of critical failure, return the original content
+        print("Returning original CSV content due to normalization failure")
+        original_buffer = BytesIO(csv_content)
+        original_buffer.seek(0)
+        return original_buffer
+
 def stream_analysis(
     csv_stream, column_map: Dict[str, str], criteria: str
 ) -> Generator[str, None, None]:
@@ -318,87 +454,58 @@ def stream_analysis(
         
         # First read without headers to examine the file structure
         print("Examining file structure...")
-        preview_data = pd.read_csv(
-            clean_csv, 
-            dtype=str, 
-            header=None,
-            nrows=10,  # Just read the first 10 rows to examine structure
-            encoding='utf-8'
-        )
+        try:
+            preview_data = pd.read_csv(
+                clean_csv, 
+                dtype=str, 
+                header=None,
+                nrows=10,  # Just read the first 10 rows to examine structure
+                encoding='utf-8'
+            )
+            
+            print(f"Preview data shape: {preview_data.shape}")
+            
+            # Print the first few rows to help diagnose
+            for i in range(min(7, len(preview_data))):
+                print(f"Row {i}: First few values: {[str(x)[:20] + '...' if len(str(x)) > 20 else str(x) for x in preview_data.iloc[i][:5]]}")
+            
+            # Now read the file again, skipping the first 4 rows to get to the header
+            clean_csv.seek(0)
+            print("Reading CSV with skiprows=4 to get to header row...")
+            
+            all_data = pd.read_csv(
+                clean_csv, 
+                dtype=str, 
+                skiprows=4,  # Skip first 4 rows to get to header
+                encoding='utf-8'
+            )
+            
+            print(f"Successfully read CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
+            
+        except Exception as e:
+            print(f"Error during initial CSV parsing: {type(e).__name__}: {str(e)}")
+            print("Attempting to normalize the CSV format...")
+            
+            # Normalize the CSV to handle delimiter/format issues
+            clean_csv = normalize_csv(csv_content)
+            
+            # Try parsing again with the normalized content
+            print("Reading normalized CSV with skiprows=4...")
+            
+            all_data = pd.read_csv(
+                clean_csv, 
+                dtype=str, 
+                skiprows=4,  # Skip first 4 rows to get to header
+                encoding='utf-8'
+            )
+            
+            print(f"Successfully read normalized CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
         
-        print(f"Preview data shape: {preview_data.shape}")
-        
-        # Print the first few rows to help diagnose
-        for i in range(min(7, len(preview_data))):
-            print(f"Row {i}: First few values: {[str(x)[:20] + '...' if len(str(x)) > 20 else str(x) for x in preview_data.iloc[i][:5]]}")
-        
-        # Now read the file again, skipping the first 4 rows to get to the header
-        clean_csv.seek(0)
-        print("Reading CSV with skiprows=4 to get to header row...")
-        
-        all_data = pd.read_csv(
-            clean_csv, 
-            dtype=str, 
-            skiprows=4,  # Skip first 4 rows to get to header
-            encoding='utf-8'
-        )
-        
-        print(f"Successfully read CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
         print("Column headers:", list(all_data.columns)[:10])  # Print first 10 headers
         
         total_rows = len(all_data)
         all_data = all_data.fillna("")
         print(f"Successfully processed file. Found {total_rows} total rows in CSV")
-            
-        # Process in chunks
-        chunk_size = 1000
-        for chunk_start in range(0, total_rows, chunk_size):
-            chunk_end = min(chunk_start + chunk_size, total_rows)
-            chunk = all_data.iloc[chunk_start:chunk_end]
-            num_rows = len(chunk)
-            
-            for start in range(0, num_rows, BATCH_SIZE):
-                end = min(start + BATCH_SIZE, num_rows)
-                batch = chunk.iloc[start:end]
-                batch_size = len(batch)
-                
-                print(f"Processing batch: rows {start+1}-{end} (batch size: {batch_size})")
-
-                try:
-                    # Get company scores from OpenAI
-                    rows = score_batch(batch, column_map, criteria)
-                    
-                    # Create response payload with rows
-                    payload = {
-                        "progress": processed + batch_size,
-                        "result": rows
-                    }
-                    
-                    processed_pct = round((processed + batch_size) / total_rows * 100)
-                    print(f"Progress: {processed + batch_size}/{total_rows} ({processed_pct}%)")
-                    
-                except APIError as e:
-                    print(f"OpenAI API error: {type(e).__name__}: {str(e)}")
-                    payload = {
-                        "progress": processed + batch_size,
-                        "error": f"OpenAI error: {e.__class__.__name__}: {e}",
-                    }
-                except Exception as e:
-                    print(f"Unexpected error in batch processing: {type(e).__name__}: {str(e)}")
-                    payload = {
-                        "progress": processed + batch_size,
-                        "error": f"Error: {type(e).__name__}: {str(e)}",
-                    }
-
-                processed += batch_size
-                json_payload = json.dumps(payload)
-                
-                yield json_payload + "\n"
-    except Exception as e:
-        print(f"Stream analysis error: {type(e).__name__}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        yield json.dumps({"error": f"Stream error: {str(e)}"}) + "\n"
 
 ###############################################################################
 # Flask route

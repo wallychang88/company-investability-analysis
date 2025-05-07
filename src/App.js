@@ -412,18 +412,19 @@ const handlePayload = (data) => {
   }
   
   // Handle timeout status from the server
-  if (data.status === 'timeout') {
-    console.log("Server timeout detected, enabling auto-resume capability");
-    const progress = data.progress || 0;
-    const totalRows = data.total_rows || parsedData.length;
-    
-    setResumeState({
-      progress: progress,
-      totalRows: totalRows
-    });
-    
-    // Set the auto-resuming state to true
-    setIsAutoResuming(true);
+if (data.status === 'timeout') {
+  console.log("Server timeout detected, enabling auto-resume capability");
+  const progress = data.progress || 0;
+  const totalRows = data.total_rows || parsedData.length;
+  
+  setResumeState({
+    progress: progress,
+    totalRows: totalRows
+  });
+  
+  // Set both isAutoResuming AND isProcessing to true immediately
+  setIsAutoResuming(true);
+  setIsProcessing(true); // Set this to true to keep the progress bar visible continuously
     
     // Add auto-resume functionality - this is all we need to add
     // Add a small delay to ensure the UI reflects the current state before resuming

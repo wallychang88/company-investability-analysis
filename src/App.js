@@ -229,14 +229,14 @@ const handleFileUpload = (e) => {
     setCriteriaWeights((arr) => arr.map((x) => (x.id === id ? { ...x, weight: w } : x)));
 
   /* ─────────── Progress histogram (0‑10) ─────────── */
-  const distribution = useMemo(() => {
-    const bins = Array(11).fill(0);
-    results.forEach((r) => {
-      const s = Math.round(parseFloat(r.investability_score));
-      if (s >= 0 && s <= 10) bins[s] += 1;
-    });
-    return bins;
-  }, [results]);
+const distribution = useMemo(() => {
+  const bins = Array(11).fill(0);
+  processingState.results.forEach((r) => {  // <-- Updated to use processingState.results
+    const s = Math.round(parseFloat(r.investability_score));
+    if (s >= 0 && s <= 10) bins[s] += 1;
+  });
+  return bins;
+}, [processingState.results]);  // <-- Updated dependency list
 
 /* ─────────── API Call ─────────── */
 const processData = async (resumeFrom = 0) => {

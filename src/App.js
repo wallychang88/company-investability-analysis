@@ -53,6 +53,7 @@ export default function VCAnalysisTool() {
   results: [],
   canResume: false,
   lastError: null,
+  allResultsProcessed: false, 
   resumeState: {
     progress: 0,
     totalRows: 0
@@ -581,23 +582,50 @@ const handlePayload = (data) => {
   }
   
   // Handle progress updates
-  if (typeof data.progress === "number") {
-    // Update all progress-related state in a single atomic update
-    setProcessingState(prev => {
-      const totalForCalc = data.total_rows || prev.resumeState.totalRows || parsedData.length;
-      const progressPercent = Math.min(100, Math.round((data.progress / totalForCalc) * 100));
-      
-      return {
-        ...prev,
-        resultCount: data.progress,
-        progress: progressPercent,
-        resumeState: {
-          ...prev.resumeState,
-          progress: data.progress
+    if (typeof data.progress === "number") {
+      // Update all progress-related state in a single atomic update
+      setProcessingState(prev => {
+        const totalForCalc = data.total_rows || prev.resumeState.totalRows || parsedData.length;
+        
+        // More precise progress calculation
+        let progressPercent;
+        if (data.progress >= totalForCalc) {
+          progressPercent = 100; // Exactly 100% when all rows are processed
+        } else {
+          // Only go up to 99.9% until completely finished
+          progressPercent = Math.min(99.9, Math.round((data.progress / totalForCalc) * 1000) / 10);
         }
+        
+        return {
+          ...prev,
+          resultCount: data.progress,
+          progress: progressPercent,
+          resumeState: {
+            ...prev.resumeState,
+            progress: data.progress
+          }
       };
     });
   }
+// Check for completion - add this new block after the progress update code
+if (data.status === 'complete' || data.status === 'finished' || 
+    (typeof data.progress === "number" && 
+     data.progress >= (data.total_rows || processingState.resumeState.totalRows || parsedData.length))) {
+  
+  console.log("Processing complete, ensuring all results are included");
+  
+  // Set a small delay to ensure all results have been processed before updating UI
+  setTimeout(() => {
+    setProcessingState(prev => ({
+      ...prev,
+      progress: 100,
+      isProcessing: false,
+      isAutoResuming: false,
+      allResultsProcessed: true
+    }));
+  }, 500); // Short delay to ensure all chunks are processed
+}
+  
 };
 
      /* ─────────── Download CSV helper ─────────── */
@@ -1176,7 +1204,9 @@ return (
                     abortRef.current.abort();
                     setProcessingState(prev => ({
                       ...prev,
-                      wasCancelled: true
+                      wasCancelled: true,
+                      isProcessing: false, // Immediately stop processing UI
+                      isAutoResuming: false // Ensure auto-resume is also stopped
                     }));
                   }
                 }}
@@ -1189,30 +1219,30 @@ return (
 
         {/* Results - Show when processing is complete OR when user cancels with some results */}
          {processingState.results.length > 0 && 
-            !(processingState.isProcessing || processingState.isAutoResuming) &&
-            (processingState.progress === 100 || processingState.resultCount > 0) && (
-            <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
-              <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
-              {processingState.wasCancelled && !processingState.isAutoResuming && (
-                <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
-                  <p className="text-amber-700">
-                    <span className="font-medium">Note:</span> Showing partial results ({processingState.results.length} companies) after cancellation.
-                  </p>
+              !(processingState.isProcessing || processingState.isAutoResuming) &&
+              ((processingState.progress === 100 && processingState.allResultsProcessed) || processingState.wasCancelled) && (
+              <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
+                <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
+                {processingState.wasCancelled && processingState.progress < 100 && (
+                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
+                    <p className="text-amber-700">
+                      <span className="font-medium">Note:</span> Showing partial results ({processingState.results.length} companies) after cancellation.
+                    </p>
+                  </div>
+                )}
+                <TopTable results={processingState.results} />
+                <Histogram results={processingState.results} />
+                <div className="text-center">
+                  <button
+                    onClick={downloadCSV}
+                    className="mt-4 px-6 py-3 bg-navy-700 text-white font-medium rounded-lg hover:bg-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-500 shadow-md"
+                  >
+                    Download Results CSV
+                  </button>
                 </div>
-              )}
-              <TopTable results={processingState.results} /> {/* Pass results as prop */}
-              <Histogram results={processingState.results} /> {/* Pass results as prop */}
-              <div className="text-center">
-                <button
-                  onClick={downloadCSV}
-                  className="mt-4 px-6 py-3 bg-navy-700 text-white font-medium rounded-lg hover:bg-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-500 shadow-md"
-                >
-                  Download Results CSV
-                </button>
-              </div>
-            </section>
+              </section>
+            )}
           )}
       </div>
     </div>
   );
-}

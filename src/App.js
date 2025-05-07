@@ -382,14 +382,26 @@ const processData = async (resumeFrom = 0) => {
         lastError: err.message || "Unknown error"
       }));
     }
-  } finally {
-    // Reset processing flags in a single update
-    setProcessingState(prev => ({
-      ...prev,
-      isProcessing: false,
-      isAutoResuming: false
-    }));
-  }
+  } 
+  finally {
+  // Don't reset isAutoResuming if we're about to auto-resume
+  setProcessingState(prev => {
+    // Check if we're in an auto-resume transition (has timeout error)
+    if (prev.lastError && prev.lastError.includes("Auto-resuming")) {
+      return {
+        ...prev,
+        isProcessing: false
+        // Keep isAutoResuming true during transition
+      };
+    } else {
+      return {
+        ...prev,
+        isProcessing: false,
+        isAutoResuming: false
+      };
+    }
+  });
+}
 };
 
   /* ─────────── Stream reader (NDJSON) ─────────── */
@@ -499,9 +511,16 @@ const handlePayload = (data) => {
     
     // Add auto-resume functionality
     setTimeout(() => {
-      console.log(`Auto-resuming processing from row ${progress}`);
-      processData(progress);
-    }, 2000);
+  console.log(`Auto-resuming processing from row ${progress}`);
+  
+  // Force isAutoResuming to true right before processData
+  setProcessingState(prev => ({
+    ...prev,
+    isAutoResuming: true
+  }));
+  
+  processData(progress);
+}, 2000);
     
     return;
   }
@@ -1115,10 +1134,10 @@ return (
         <div className="text-center mb-8">
           <button
             onClick={processData}
-            disabled={processingState.isProcessing || !parsedData.length}
-            className="px-8 py-4 bg-navy-800 text-white text-lg font-medium rounded-xl hover:bg-navy-900 disabled:opacity-50 shadow-lg"
+            disabled={processingState.isProcessing || processingState.isAutoResuming || !parsedData.length}
+            className="..."
           >
-            {processingState.isProcessing ? "Processing…" : "Analyze Companies"}
+            {(processingState.isProcessing || processingState.isAutoResuming) ? "Processing…" : "Analyze Companies"}
           </button>
           {!parsedData.length && file && (
             <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>

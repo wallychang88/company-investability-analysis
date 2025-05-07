@@ -1171,8 +1171,7 @@ return (
 
         {/* Results - Show when processing is complete OR when user cancels with some results */}
          {processingState.results.length > 0 && 
-            !processingState.isProcessing && 
-            !processingState.isAutoResuming && 
+            !(processingState.isProcessing || processingState.isAutoResuming) &&
             (processingState.progress === 100 || processingState.resultCount > 0) && (
             <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
               <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>

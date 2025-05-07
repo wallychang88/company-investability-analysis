@@ -38,9 +38,7 @@ export default function VCAnalysisTool() {
   • Have between 80 and 300 employees
   • Are based in the US, UK, Canada, or Israel
   • Have raised in total less than $150 million
-  • Ownership is private, venture capital, private equity, or seed
-  • provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
-  • have a clear, defensible moat (e.g., proprietary data or network effects)`
+  • Ownership is private, venture capital, private equity, or seed`
   );
   const [criteriaWeights, setCriteriaWeights] = useState([]); // [{id,label,weight}]
   const [isProcessing, setIsProcessing] = useState(false);
@@ -423,9 +421,10 @@ const handlePayload = (data) => {
   // Handle chunk status
   if (data.status === 'chunk_complete' && Array.isArray(data.result)) {
     if (data.result.length > 0) {
-      // Check for valid data before updating
+      // Check for valid data - accept NAME FIELD BLANK placeholders too
       const validResults = data.result.filter(r => 
-        r.company_name && typeof r.investability_score !== 'undefined'
+        // Consider any company_name valid (including placeholders) as long as there's a score
+        r.company_name !== undefined && typeof r.investability_score !== 'undefined'
       );
       
       if (validResults.length > 0) {
@@ -449,11 +448,6 @@ const handlePayload = (data) => {
         });
       }
     }
-  }
-  
-  // Regular array results (backward compatibility)
-  if (Array.isArray(data.result) && !data.status) {
-    // ... existing array handling code ...
   }
   
   if (typeof data.progress === "number") {
@@ -623,7 +617,7 @@ const downloadCSV = () => {
     </div>
   );
 
-  /* Top 5 table with enhanced display */
+/* Top Table with enhanced display */
 const TopTable = () => {
   // Get matched company data (combines results with original data)
   const topCompanies = useMemo(() => {
@@ -638,34 +632,33 @@ const TopTable = () => {
         // Get the company name from the result
         const companyName = result.company_name;
         
-        // Find the original company data using multiple matching strategies
-        let originalData = null;
+        // Check if this is a placeholder name
+        const isPlaceholder = companyName.includes("NAME FIELD BLANK");
         
-        // First try exact match on description field
-        if (columnMap.description) {
-          originalData = parsedData.find(row => row[columnMap.description] === companyName);
+        // If it's a placeholder, don't try to match with original data
+        if (isPlaceholder) {
+          return {
+            name: companyName,
+            foundingYear: 'N/A',
+            employeeCount: 'N/A',
+            website: '',
+            score: result.investability_score
+          };
         }
         
-        // If no match, try exact match on company_name field
-        if (!originalData && columnMap.company_name) {
+        // For regular names, find the original company data
+        let originalData = null;
+        
+        // Try exact match on company_name field
+        if (columnMap.company_name) {
           originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
         }
         
-        // If still no match, try case-insensitive contains match
-        if (!originalData && columnMap.description) {
+        // If still no match, try case-insensitive match on company_name
+        if (!originalData && columnMap.company_name) {
           originalData = parsedData.find(row => {
-            const desc = row[columnMap.description];
-            return desc && desc.toLowerCase().includes(companyName.toLowerCase());
-          });
-        }
-        
-        // If still no match, try case-insensitive match on any column
-        if (!originalData) {
-          originalData = parsedData.find(row => {
-            return Object.values(row).some(value => 
-              value && typeof value === 'string' && 
-              value.toLowerCase().includes(companyName.toLowerCase())
-            );
+            const name = row[columnMap.company_name];
+            return name && name.toLowerCase() === companyName.toLowerCase();
           });
         }
         
@@ -732,7 +725,13 @@ const TopTable = () => {
               ) : (
                 topCompanies.map((company, idx) => (
                   <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{company.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">
+                      {company.name.includes("NAME FIELD BLANK") ? (
+                        <span className="text-amber-600 italic">{company.name}</span>
+                      ) : (
+                        company.name
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.foundingYear}</td>
                     <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">{company.employeeCount}</td>
                     <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700">

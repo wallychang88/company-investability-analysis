@@ -111,16 +111,17 @@ def score_batch(
     for idx, (_, row) in enumerate(df_slice.iterrows()):
         print(f"Processing row {idx+1}")
         
-        # Get company name (from description field or designated company_name field)
-        desc_col = column_map.get("description", "")
+        # Get company name (from designated company_name field)
         name_col = column_map.get("company_name", "")
             
         # Safe row access
         company_name = ""
         if name_col and name_col in row:
             company_name = row[name_col]
-        if not company_name and desc_col and desc_col in row:
-            company_name = row[desc_col]
+       
+        # Use placeholder for blank company names
+        if not company_name or company_name.strip() == "":
+            company_name = f"NAME FIELD BLANK (Row {idx+1})"
             
         print(f"Using company name: '{company_name}'")
         

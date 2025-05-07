@@ -501,7 +501,7 @@ const handlePayload = (data) => {
       isProcessing: true,
       isAutoResuming: true,
       canResume: true,
-      lastError: "Processing timed out. Auto-resuming in 2 seconds...",
+      lastError: null,
       wasCancelled: false,  // Ensure wasCancelled is false during auto-resume
       resumeState: {
         progress: progress,
@@ -1132,20 +1132,23 @@ return (
 
         {/* Analyze */}
         <div className="text-center mb-8">
-          <button
-            onClick={processData}
-            disabled={processingState.isProcessing || processingState.isAutoResuming || !parsedData.length}
-            className="..."
-          >
-            {(processingState.isProcessing || processingState.isAutoResuming) ? "Processing…" : "Analyze Companies"}
-          </button>
-          {!parsedData.length && file && (
+          {parsedData.length > 0 ? (
+            <button
+              onClick={processData}
+              disabled={processingState.isProcessing || processingState.isAutoResuming}
+              className="px-8 py-4 bg-navy-800 text-white text-lg font-medium rounded-xl hover:bg-navy-900 disabled:opacity-50 shadow-lg"
+            >
+              {(processingState.isProcessing || processingState.isAutoResuming) ? "Processing…" : "Analyze Companies"}
+            </button>
+          ) : file ? (
             <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>
+          ) : (
+            <p className="text-sm text-gray-600">Upload a CSV file to begin analysis</p>
           )}
         </div>
 
         {/* Progress */}
-        {(processingState.isProcessing || processingState.isAutoResuming) && (
+          {(processingState.isProcessing || processingState.isAutoResuming) && (
             <section 
               ref={progressSectionRef}
               className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4"
@@ -1164,27 +1167,23 @@ return (
                 />
               </div>
               <p className="text-center text-sm text-gray-500">
-                {processingState.isAutoResuming 
-                  ? "Auto-resuming..." 
-                  : (processingState.progress < 100 ? "Analyzing…" : "Analysis complete!")}
+                {processingState.progress < 100 ? "Analyzing…" : "Analysis complete!"}
               </p>
-              {processingState.isProcessing && (
-                <button
-                  onClick={() => {
-                    if (abortRef.current) {
-                      abortRef.current.abort();
-                      // Set wasCancelled to true when user explicitly cancels
-                      setProcessingState(prev => ({
-                        ...prev,
-                        wasCancelled: true
-                      }));
-                    }
-                  }}
-                  className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
-                >
-                  Cancel
-                </button>
-              )}
+              {/* Always show Cancel button, removed the isProcessing condition */}
+              <button
+                onClick={() => {
+                  if (abortRef.current) {
+                    abortRef.current.abort();
+                    setProcessingState(prev => ({
+                      ...prev,
+                      wasCancelled: true
+                    }));
+                  }
+                }}
+                className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+              >
+                Cancel
+              </button>
             </section>
           )}
 

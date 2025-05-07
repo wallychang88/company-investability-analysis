@@ -830,14 +830,15 @@ const TopTable = () => {
 };
 
   /* ─────────── Render ─────────── */
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+return (
+    <div className="min-h-screen bg-gray-100">
       <div className="p-6 max-w-6xl mx-auto">
         {/* Header */}
         <header className="bg-white rounded-xl shadow-xl overflow-hidden mb-8">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-8 text-white text-center">
-            <h1 className="text-3xl font-bold">SourceScrub Investability Analysis Tool</h1>
-            <p className="text-blue-100 mt-2">Analyze companies against your investment criteria. Upload a raw SourceScrub CSV file.</p>
+          <div className="bg-navy-900 px-6 py-8 text-white text-center">
+            <h1 className="text-3xl font-bold">Carrick Capital</h1>
+            <h2 className="text-2xl font-medium mt-2">Investability Analysis Tool</h2>
+            <p className="text-gray-300 mt-2">Analyze companies against your investment criteria. Upload a raw SourceScrub CSV file.</p>
           </div>
         </header>
 
@@ -850,11 +851,11 @@ const TopTable = () => {
         )}
 
         {/* 1. Upload */}
-        <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-blue-50 space-y-4">
-          <h2 className="text-xl font-semibold text-blue-800 flex items-center">Upload CSV / TSV File</h2>
-          <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-200 rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition text-center">
+        <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-gray-50 space-y-4">
+          <h2 className="text-xl font-semibold text-navy-800 flex items-center">Upload CSV / TSV File</h2>
+          <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-navy-200 rounded-lg cursor-pointer bg-white hover:bg-navy-50 transition text-center">
             <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={handleFileUpload} className="hidden" />
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-navy-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             <span className="mt-2 text-base text-gray-600">{file ? file.name : "Click to select a file or drop it here"}</span>
@@ -864,14 +865,14 @@ const TopTable = () => {
 
         {/* 2. Preview */}
         {parsedData.length > 0 && (
-          <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white">
-            <h2 className="text-xl font-semibold text-blue-800 mb-4">CSV Preview</h2>
+          <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white">
+            <h2 className="text-xl font-semibold text-navy-800 mb-4">CSV Preview</h2>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-100">
+                <thead className="bg-navy-50">
                   <tr>
                     {headers.map((h) => (
-                      <th key={h} className="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                      <th key={h} className="px-4 py-3 text-left font-medium text-navy-700 uppercase tracking-wider">
                         {h}
                       </th>
                     ))}
@@ -898,10 +899,10 @@ const TopTable = () => {
 
         {/* 3. Column Map */}
         {headers.length > 0 && (
-          <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white space-y-6">
-            <h2 className="text-xl font-semibold text-blue-800">Map Columns</h2>
+          <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-6">
+            <h2 className="text-xl font-semibold text-navy-800">Map Columns</h2>
             {/* Required */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-blue-50 p-4 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-navy-50 p-4 rounded-lg">
               {REQUIRED_COLS.map((c) =>
                 renderMappingSelect(c, c.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()), true)
               )}
@@ -916,8 +917,8 @@ const TopTable = () => {
         )}
 
         {/* 4. Criteria & weights */}
-        <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white space-y-6">
-          <h2 className="text-xl font-semibold text-blue-800">Define Investing Criteria</h2>
+        <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-6">
+          <h2 className="text-xl font-semibold text-navy-800">Define Investing Criteria</h2>
           <textarea
             value={investCriteria}
             onChange={(e) => setInvestCriteria(e.target.value)}
@@ -961,16 +962,16 @@ const TopTable = () => {
               }
             }}
             rows={10}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-200"
+            className="w-full rounded-md border-gray-300 shadow-sm focus:border-navy-500 focus:ring-navy-200"
             placeholder="Enter your investment criteria. Press Enter to add a new bullet point."
           />
-          <p className="text-xs text-indigo-600">Use bullet points (•) to define each criterion.</p>
+          <p className="text-xs text-navy-600">Use bullet points (•) to define each criterion.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {criteriaWeights.map((it) => (
               <div key={it.id} className="bg-gray-50 p-4 rounded-lg shadow-sm">
                 <label className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700 truncate" title={it.label}>{it.label}</span>
-                  <span className="text-sm font-bold text-indigo-600">{it.weight.toFixed(1)}×</span>
+                  <span className="text-sm font-bold text-navy-600">{it.weight.toFixed(1)}×</span>
                 </label>
                 <input
                   type="range"
@@ -991,7 +992,7 @@ const TopTable = () => {
           <button
             onClick={processData}
             disabled={isProcessing || !parsedData.length}
-            className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-lg font-medium rounded-xl hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 shadow-lg"
+            className="px-8 py-4 bg-navy-800 text-white text-lg font-medium rounded-xl hover:bg-navy-900 disabled:opacity-50 shadow-lg"
           >
             {isProcessing ? "Processing…" : "Analyze Companies"}
           </button>
@@ -1002,17 +1003,17 @@ const TopTable = () => {
 
         {/* Progress */}
         {isProcessing && (
-          <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white space-y-4">
-            <h2 className="text-xl font-semibold text-blue-800">Processing Companies</h2>
-            <div className="flex items-center justify-between text-xs font-semibold text-blue-600">
+          <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4">
+            <h2 className="text-xl font-semibold text-navy-800">Processing Companies</h2>
+            <div className="flex items-center justify-between text-xs font-semibold text-navy-600">
               <span>Progress</span>
               <span>
                 {resultCount} / {parsedData.length}
               </span>
             </div>
-            <div className="w-full h-3 bg-blue-100 rounded-full overflow-hidden">
+            <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500"
+                className="h-full bg-navy-600 transition-all duration-500"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -1038,7 +1039,7 @@ const TopTable = () => {
     <p className="text-amber-600 mb-2">Processing timed out due to Vercel's 60-second limit.</p>
     <button
       onClick={() => processData(resumeState.progress)}
-      className="px-6 py-3 bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300 shadow-md"
+      className="px-6 py-3 bg-navy-600 text-white font-medium rounded-lg hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-300 shadow-md"
     >
       Resume Processing from Row {resumeState.progress}
     </button>
@@ -1047,14 +1048,14 @@ const TopTable = () => {
 
         {/* Results */}
         {results.length > 0 && !isProcessing && (
-          <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-white space-y-8 overflow-x-auto">
-            <h2 className="text-xl font-semibold text-blue-800">Analysis Results</h2>
+          <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
+            <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
             <TopTable />
             <Histogram />
             <div className="text-center">
               <button
                 onClick={downloadCSV}
-                className="mt-4 px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-md"
+                className="mt-4 px-6 py-3 bg-navy-700 text-white font-medium rounded-lg hover:bg-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-500 shadow-md"
               >
                 Download Results CSV
               </button>

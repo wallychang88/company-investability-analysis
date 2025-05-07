@@ -483,8 +483,8 @@ const handlePayload = (data) => {
     }));
     return;
   }
-  
-  // Handle timeout status from the server
+
+  // Handle timeout status
   if (data.status === 'timeout') {
   console.log("Server timeout detected, enabling auto-resume capability");
   const progress = data.progress || 0;
@@ -513,17 +513,16 @@ const handlePayload = (data) => {
       }
     }));
     
-setTimeout(() => {
-  // Update all processing flags in a single atomic update
-  setProcessingState(prev => ({...}));
+    // Add auto-resume functionality with a further delay
+    setTimeout(() => {
+      console.log(`Auto-resuming processing from row ${progress}`);
+      
+      // Don't update state here - just call processData directly
+      processData(progress);
+    }, 2000);
+  }, 100); // Make sure this closing bracket and timeout value is here
   
-  setTimeout(() => {
-    console.log(`Auto-resuming processing from row ${progress}`);
-    processData(progress);
-  }, 2000);
-}, 100); // Add this closing bracket and timeout value
-  
-return;
+  return;
 }
   
   // Handle status updates

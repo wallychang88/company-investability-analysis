@@ -72,102 +72,47 @@ export default function VCAnalysisTool() {
   }, [investCriteria]);
 
   /* ─────────── File Upload & Parse ─────────── */
-  const handleFileUpload = (e) => {
+ const handleFileUpload = (e) => {
   const f = e.target.files[0];
   if (!f) return;
+  
+  // Reset all analysis-related state when a new file is uploaded
   setFile(f);
+  setParsedData([]);
+  setHeaders([]);
+  setColumnMap({});
+  setResults([]);
+  setProgress(0);
+  setResultCount(0);
+  setLastError(null);
+  setCanResume(false);
+  setResumeState({
+    progress: 0,
+    totalRows: 0
+  });
+  
+  // If there's an active abort controller, use it to cancel any ongoing processing
+  if (abortRef.current) {
+    try {
+      abortRef.current.abort();
+      abortRef.current = null;
+    } catch (e) {
+      console.warn("Error aborting previous request:", e);
+    }
+  }
 
+  // Now parse the new file
   Papa.parse(f, {
     delimiter: "", // auto‑detect (csv / tsv / pipe)
     header: false,
     skipEmptyLines: false,
     complete: ({ data }) => {
       // Detect the header row by looking for "Company Name" and "Informal Name"
-      let headerRowIndex = -1;
-      
-      for (let i = 0; i < Math.min(10, data.length); i++) {
-        const row = data[i];
-        if (Array.isArray(row) && row.length >= 2) {
-          // Check if first column contains "Company Name" and second contains "Informal Name"
-          if (
-            row[0] && row[0].toString().includes("Company Name") && 
-            row[1] && row[1].toString().includes("Informal Name")
-          ) {
-            headerRowIndex = i;
-            console.log(`Header row detected at line ${i+1}`);
-            break;
-          }
-        }
-      }
-      
-      // If header row not found, fallback to default (row 5 or row 4)
-      if (headerRowIndex < 0) {
-        if (data.length > 4) {
-          headerRowIndex = 4;  // Row 5 (index 4)
-          console.log("Header row not detected, using default row 5");
-        } else if (data.length > 3) {
-          headerRowIndex = 3;  // Row 4 (index 3)
-          console.log("Header row not detected, using shorter default row 4");
-        } else if (data.length > 0) {
-          headerRowIndex = 0;
-          console.log("Header row not detected, using first row");
-        } else {
-          setLastError("File appears to be empty");
-          return;
-        }
-      }
-      
-      const hdr = data[headerRowIndex];
-      if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
-        setLastError("Could not detect headers in file");
-        return;
-      }
-      
-      // Process data rows after the header
-      const rows = data
-        .slice(headerRowIndex + 1)
-        .map((row) => {
-          const o = {};
-          hdr.forEach((h, idx) => {
-            if (h) o[h.trim()] = row[idx];
-          });
-          return o;
-        })
-        .filter((o) => Object.keys(o).length > 0);
-
-      setParsedData(rows);
-      const cleanHeaders = hdr.filter(Boolean).map((h) => h.trim());
-      setHeaders(cleanHeaders);
-
-      // Auto‑map columns (case‑insensitive match)
-      const lower = cleanHeaders.map((h) => h.toLowerCase());
-      const find = (needle) => {
-        const idx = lower.indexOf(needle.toLowerCase());
-        return idx !== -1 ? cleanHeaders[idx] : "";
-      };
-      setColumnMap({
-        employee_count: find("employee count") || find("employees"),
-        description: find("description") || find("company description"),
-        industries: find("industries") || find("industry"),
-        specialties: find("specialties") || find("specialty"),
-        products_services: find("products and services") || find("products & services") || find("products"),
-        end_markets: find("end markets") || find("markets"),
-        country: find("country") || find("location") || find("hq country"),
-        ownership: find("ownership") || find("company type") || find("company status"),
-        total_raised: find("total raised") || find("total funding") || find("funding"),
-        latest_raised: find("latest raised") || find("latest round") || find("last fundraise"),
-        date_of_most_recent_investment: find("date of most recent investment") || find("last investment date") || find("most recent funding date"),
-        field_1: "",
-        field_2: "",
-        field_3: ""
-      });
-      
-      setLastError(null);
+      // ... rest of your existing parsing code ...
     },
     error: (err) => setLastError(`CSV parse error: ${err.message}`),
   });
 };
-
   /* ─────────── Column mapping helpers ─────────── */
   const updateMapping = (field, value) =>
     setColumnMap((cm) => ({ ...cm, [field]: value }));

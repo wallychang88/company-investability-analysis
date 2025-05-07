@@ -41,18 +41,21 @@ export default function VCAnalysisTool() {
   • Ownership is private, venture capital, private equity, or seed`
   );
   const [criteriaWeights, setCriteriaWeights] = useState([]); // [{id,label,weight}]
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [resultCount, setResultCount] = useState(0);
-  const [results, setResults] = useState([]);
-  const [lastError, setLastError] = useState(null); // For error state
   const abortRef = useRef(null);
   const progressSectionRef = useRef(null);
-  const [isAutoResuming, setIsAutoResuming] = useState(false);
-  const [canResume, setCanResume] = useState(false);
-  const [resumeState, setResumeState] = useState({
+  
+  const [processingState, setProcessingState] = useState({
+  isProcessing: false,
+  isAutoResuming: false,
   progress: 0,
-  totalRows: 0
+  resultCount: 0,
+  results: [],
+  canResume: false,
+  lastError: null,
+  resumeState: {
+    progress: 0,
+    totalRows: 0
+  }
 });
 
   /* ───────── Parse bullet list → criteriaWeights ───────── */
@@ -72,6 +75,7 @@ export default function VCAnalysisTool() {
   }, [investCriteria]);
 
   /* ─────────── File Upload & Parse ─────────── */
+// Update handleFileUpload function to use combined state
 const handleFileUpload = (e) => {
   const f = e.target.files[0];
   if (!f) return;
@@ -81,14 +85,20 @@ const handleFileUpload = (e) => {
   setParsedData([]);
   setHeaders([]);
   setColumnMap({});
-  setResults([]);
-  setProgress(0);
-  setResultCount(0);
-  setLastError(null);
-  setCanResume(false);
-  setResumeState({
+  
+  // Replace multiple state updates with a single combined update
+  setProcessingState({
+    isProcessing: false,
+    isAutoResuming: false,
     progress: 0,
-    totalRows: 0
+    resultCount: 0,
+    results: [],
+    canResume: false,
+    lastError: null,
+    resumeState: {
+      progress: 0,
+      totalRows: 0
+    }
   });
   
   // If there's an active abort controller, use it to cancel any ongoing processing
@@ -137,14 +147,22 @@ const handleFileUpload = (e) => {
           headerRowIndex = 0;
           console.log("Header row not detected, using first row");
         } else {
-          setLastError("File appears to be empty");
+          // Update error in combined state
+          setProcessingState(prev => ({
+            ...prev,
+            lastError: "File appears to be empty"
+          }));
           return;
         }
       }
       
       const hdr = data[headerRowIndex];
       if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
-        setLastError("Could not detect headers in file");
+        // Update error in combined state
+        setProcessingState(prev => ({
+          ...prev,
+          lastError: "Could not detect headers in file"
+        }));
         return;
       }
       
@@ -187,9 +205,19 @@ const handleFileUpload = (e) => {
         field_3: ""
       });
       
-      setLastError(null);
+      // Clear any error in combined state
+      setProcessingState(prev => ({
+        ...prev,
+        lastError: null
+      }));
     },
-    error: (err) => setLastError(`CSV parse error: ${err.message}`),
+    error: (err) => {
+      // Update error in combined state
+      setProcessingState(prev => ({
+        ...prev,
+        lastError: `CSV parse error: ${err.message}`
+      }));
+    },
   });
 };
   /* ─────────── Column mapping helpers ─────────── */
@@ -212,10 +240,17 @@ const handleFileUpload = (e) => {
 
 /* ─────────── API Call ─────────── */
 const processData = async (resumeFrom = 0) => {
-  setLastError(null);
+  // Clear error
+  setProcessingState(prev => ({
+    ...prev,
+    lastError: null
+  }));
   
   if (!file) {
-    setLastError("Upload a file first");
+    setProcessingState(prev => ({
+      ...prev,
+      lastError: "Upload a file first"
+    }));
     return;
   }
 
@@ -223,13 +258,19 @@ const processData = async (resumeFrom = 0) => {
   const missing = REQUIRED_COLS.filter((c) => !columnMap[c]);
   if (missing.length) {
     const missingNames = missing.map(c => c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()));
-    setLastError(`Please map these required columns: ${missingNames.join(", ")}`);
+    setProcessingState(prev => ({
+      ...prev,
+      lastError: `Please map these required columns: ${missingNames.join(", ")}`
+    }));
     return;
   }
 
   // Check if we have any rows to process
   if (parsedData.length === 0) {
-    setLastError("No valid data rows found to process");
+    setProcessingState(prev => ({
+      ...prev,
+      lastError: "No valid data rows found to process"
+    }));
     return;
   }
 
@@ -240,30 +281,45 @@ const processData = async (resumeFrom = 0) => {
     .filter((l) => l.startsWith("•"));
   
   if (bullets.length === 0) {
-    setLastError("Please add at least one bullet point (•) criterion");
+    setProcessingState(prev => ({
+      ...prev,
+      lastError: "Please add at least one bullet point (•) criterion"
+    }));
     return;
   }
 
-  // Begin processing
-  setIsProcessing(true);
+  // Begin processing - update all processing flags at once
   if (resumeFrom === 0) {
-    // Only reset progress if starting from beginning
-    setProgress(0);
-    setResultCount(0);
-    setResults([]);
+    // Starting fresh - reset everything
+    setProcessingState(prev => ({
+      ...prev,
+      isProcessing: true,
+      progress: 0,
+      resultCount: 0,
+      results: [],
+      canResume: false,
+      // Keep isAutoResuming as is
+    }));
   } else {
+    // Resuming from a point - keep results but update processing flag
     console.log(`Resuming processing from row ${resumeFrom}`);
+    setProcessingState(prev => ({
+      ...prev,
+      isProcessing: true,
+      canResume: false,
+      // Keep other values
+    }));
   }
 
   // Scroll to the progress section with smooth behavior
   setTimeout(() => {
-          if (progressSectionRef.current) {
-            progressSectionRef.current.scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'start'
-            });
-          }
-        }, 100);
+    if (progressSectionRef.current) {
+      progressSectionRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start'
+      });
+    }
+  }, 100);
 
   // Abort controller for multiple runs
   if (abortRef.current) {
@@ -308,9 +364,6 @@ const processData = async (resumeFrom = 0) => {
       throw new Error(`API error (${res.status}): ${errorText || res.statusText}`);
     }
 
-    // Reset resume state since we're processing now
-    setCanResume(false);
-
     if (res.body && typeof res.body.getReader === 'function') {
       await readStream(res.body.getReader());
     } else {
@@ -320,12 +373,20 @@ const processData = async (resumeFrom = 0) => {
   } catch (err) {
     if (err.name !== "AbortError") {
       console.error("Analysis error:", err);
-      setLastError(err.message || "Unknown error");
+      
+      // Update error in combined state
+      setProcessingState(prev => ({
+        ...prev,
+        lastError: err.message || "Unknown error"
+      }));
     }
   } finally {
-    setIsProcessing(false);
-    // Clear the auto-resuming state when processing is complete
-    setIsAutoResuming(false);
+    // Reset processing flags in a single update
+    setProcessingState(prev => ({
+      ...prev,
+      isProcessing: false,
+      isAutoResuming: false
+    }));
   }
 };
 
@@ -407,46 +468,54 @@ const handlePayload = (data) => {
   if (!data) return;
   
   if (data.error) {
-    setLastError(data.error);
+    setProcessingState(prev => ({
+      ...prev,
+      lastError: data.error
+    }));
     return;
   }
   
   // Handle timeout status from the server
-if (data.status === 'timeout') {
-  console.log("Server timeout detected, enabling auto-resume capability");
-  const progress = data.progress || 0;
-  const totalRows = data.total_rows || parsedData.length;
-  
-  setResumeState({
-    progress: progress,
-    totalRows: totalRows
-  });
-  
-  // Set both isAutoResuming AND isProcessing to true immediately
-  setIsAutoResuming(true);
-  setIsProcessing(true); // Set this to true to keep the progress bar visible continuously
+  if (data.status === 'timeout') {
+    console.log("Server timeout detected, enabling auto-resume capability");
+    const progress = data.progress || 0;
+    const totalRows = data.total_rows || parsedData.length;
     
-    // Add auto-resume functionality - this is all we need to add
-    // Add a small delay to ensure the UI reflects the current state before resuming
+    // Update all processing flags in a single atomic update
+    setProcessingState(prev => ({
+      ...prev,
+      isProcessing: true,
+      isAutoResuming: true,
+      canResume: true,
+      lastError: "Processing timed out. Auto-resuming in 2 seconds...",
+      resumeState: {
+        progress: progress,
+        totalRows: totalRows
+      }
+    }));
+    
+    // Add auto-resume functionality
     setTimeout(() => {
       console.log(`Auto-resuming processing from row ${progress}`);
       processData(progress);
-      // Note: setIsAutoResuming will be set to false when processing completes
-      // in the finally block of processData
     }, 2000);
     
-    // We still need this for backward compatibility
-    setCanResume(true);
-    setLastError("Processing timed out. Auto-resuming in 2 seconds...");
     return;
   }
   
   // Handle status updates
   if (data.status === 'starting' || data.status === 'resuming') {
     console.log(`Analysis ${data.status} with ${data.total_rows} total rows`);
+    
     // Update total rows if provided
     if (data.total_rows) {
-      setResumeState(prev => ({...prev, totalRows: data.total_rows}));
+      setProcessingState(prev => ({
+        ...prev,
+        resumeState: {
+          ...prev.resumeState,
+          totalRows: data.total_rows
+        }
+      }));
     }
   }
   
@@ -463,10 +532,10 @@ if (data.status === 'timeout') {
       console.log(`Filtered to ${validResults.length} valid results`);
       
       if (validResults.length > 0) {
-        // Update results state
-        setResults(prev => {
+        // Update results state atomically
+        setProcessingState(prev => {
           // Filter out duplicates
-          const newResults = [...prev];
+          const newResults = [...prev.results];
           validResults.forEach(result => {
             // Check if this company is already in results
             const existingIndex = newResults.findIndex(r => r.company_name === result.company_name);
@@ -480,7 +549,10 @@ if (data.status === 'timeout') {
           });
           
           console.log(`Total results after update: ${newResults.length}`);
-          return newResults;
+          return {
+            ...prev,
+            results: newResults
+          };
         });
       }
     }
@@ -488,28 +560,38 @@ if (data.status === 'timeout') {
   
   // Handle progress updates
   if (typeof data.progress === "number") {
-    // Always update progress counter for UX feedback
-    setResultCount(data.progress);
-    
-    // Update resume state
-    setResumeState(prev => ({...prev, progress: data.progress}));
-    
-    // Calculate progress percentage
-    const totalForCalc = data.total_rows || resumeState.totalRows || parsedData.length;
-    const progressPercent = Math.min(100, Math.round((data.progress / totalForCalc) * 100));
-    setProgress(progressPercent);
+    // Update all progress-related state in a single atomic update
+    setProcessingState(prev => {
+      const totalForCalc = data.total_rows || prev.resumeState.totalRows || parsedData.length;
+      const progressPercent = Math.min(100, Math.round((data.progress / totalForCalc) * 100));
+      
+      return {
+        ...prev,
+        resultCount: data.progress,
+        progress: progressPercent,
+        resumeState: {
+          ...prev.resumeState,
+          progress: data.progress
+        }
+      };
+    });
   }
 };
 
      /* ─────────── Download CSV helper ─────────── */
 const downloadCSV = () => {
-  if (!results.length) return;
+  // Use the results from the combined state
+  if (!processingState.results.length) return;
   
   // Find name field (either description or company_name)
   const companyField = columnMap.company_name || columnMap.description;
   
   if (!companyField) {
-    setLastError("Could not determine company name field");
+    // Update error in the combined state
+    setProcessingState(prevState => ({
+      ...prevState,
+      lastError: "Could not determine company name field"
+    }));
     return;
   }
   
@@ -520,17 +602,17 @@ const downloadCSV = () => {
     
     // Try multiple matching strategies to find the corresponding result
     if (companyField) {
-      match = results.find((r) => r.company_name === row[companyField]);
+      match = processingState.results.find((r) => r.company_name === row[companyField]);
     }
     
     if (!match && columnMap.description && companyField !== columnMap.description) {
-      match = results.find((r) => r.company_name === row[columnMap.description]);
+      match = processingState.results.find((r) => r.company_name === row[columnMap.description]);
     }
     
     if (!match && companyField) {
       const companyName = row[companyField];
       if (companyName) {
-        match = results.find((r) => 
+        match = processingState.results.find((r) => 
           r.company_name.toLowerCase().includes(companyName.toLowerCase()) ||
           companyName.toLowerCase().includes(r.company_name.toLowerCase())
         );
@@ -626,7 +708,18 @@ const downloadCSV = () => {
   );
 
   /* Histogram bars */
-  const Histogram = () => (
+const Histogram = ({ results }) => {
+  // Calculate distribution using the results passed as prop
+  const distribution = useMemo(() => {
+    const bins = Array(11).fill(0);
+    results.forEach((r) => {
+      const s = Math.round(parseFloat(r.investability_score));
+      if (s >= 0 && s <= 10) bins[s] += 1;
+    });
+    return bins;
+  }, [results]);
+
+  return (
     <div className="p-6 bg-gray-50 rounded-lg shadow-inner">
       <h3 className="font-medium text-gray-700 mb-4">Score Distribution</h3>
       <div className="flex items-end justify-between h-48 space-x-2 px-2">
@@ -653,11 +746,11 @@ const downloadCSV = () => {
       </div>
     </div>
   );
+};
 
   /* Top 5 table with enhanced display */
-/* Top table with enhanced display */
-const TopTable = () => {
-  // Get matched company data (combines results with original data)
+const TopTable = ({ results }) => {
+  // Use the results prop instead of accessing the global state
   const topCompanies = useMemo(() => {
     // Early return if no results
     if (results.length === 0) return [];
@@ -871,10 +964,10 @@ return (
         </header>
 
         {/* Error Display */}
-        {lastError && (
+        {processingState.lastError && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
             <p className="font-medium">Error:</p>
-            <p>{lastError}</p>
+            <p>{processingState.lastError}</p>
           </div>
         )}
 
@@ -1019,10 +1112,10 @@ return (
         <div className="text-center mb-8">
           <button
             onClick={processData}
-            disabled={isProcessing || !parsedData.length}
+            disabled={processingState.isProcessing || !parsedData.length}
             className="px-8 py-4 bg-navy-800 text-white text-lg font-medium rounded-xl hover:bg-navy-900 disabled:opacity-50 shadow-lg"
           >
-            {isProcessing ? "Processing…" : "Analyze Companies"}
+            {processingState.isProcessing ? "Processing…" : "Analyze Companies"}
           </button>
           {!parsedData.length && file && (
             <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>
@@ -1030,55 +1123,60 @@ return (
         </div>
 
         {/* Progress */}
-        {(isProcessing || isAutoResuming) && (
-  <section 
-    ref={progressSectionRef}
-    className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4"
-  >
-    <h2 className="text-xl font-semibold text-navy-800">Processing Companies</h2>
-    <div className="flex items-center justify-between text-xs font-semibold text-navy-600">
-      <span>Progress</span>
-      <span>
-        {resultCount} / {parsedData.length}
-      </span>
-    </div>
-    <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden">
-      <div
-        className="h-full bg-navy-600 transition-all duration-500"
-        style={{ width: `${progress}%` }}
-      />
-    </div>
-    <p className="text-center text-sm text-gray-500">
-      {isAutoResuming ? "Auto-resuming..." : (progress < 100 ? "Analyzing…" : "Analysis complete!")}
-    </p>
-    {isProcessing && (
-      <button
-        onClick={() => {
-          if (abortRef.current) {
-            abortRef.current.abort();
-          }
-        }}
-        className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
-      >
-        Cancel
-      </button>
-    )}
-  </section>
-)}
+        {(processingState.isProcessing || processingState.isAutoResuming) && (
+            <section 
+              ref={progressSectionRef}
+              className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4"
+            >
+              <h2 className="text-xl font-semibold text-navy-800">Processing Companies</h2>
+              <div className="flex items-center justify-between text-xs font-semibold text-navy-600">
+                <span>Progress</span>
+                <span>
+                  {processingState.resultCount} / {parsedData.length}
+                </span>
+              </div>
+              <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-navy-600 transition-all duration-500"
+                  style={{ width: `${processingState.progress}%` }}
+                />
+              </div>
+              <p className="text-center text-sm text-gray-500">
+                {processingState.isAutoResuming 
+                  ? "Auto-resuming..." 
+                  : (processingState.progress < 100 ? "Analyzing…" : "Analysis complete!")}
+              </p>
+              {processingState.isProcessing && (
+                <button
+                  onClick={() => {
+                    if (abortRef.current) {
+                      abortRef.current.abort();
+                    }
+                  }}
+                  className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+                >
+                  Cancel
+                </button>
+              )}
+            </section>
+          )}
 
         {/* Results - Show when processing is complete OR when user cancels with some results */}
-          {results.length > 0 && !isProcessing && !isAutoResuming && (progress === 100 || resultCount > 0) && (
+         {processingState.results.length > 0 && 
+            !processingState.isProcessing && 
+            !processingState.isAutoResuming && 
+            (processingState.progress === 100 || processingState.resultCount > 0) && (
             <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
               <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
-              {progress < 100 && !isAutoResuming && (
+              {processingState.progress < 100 && !processingState.isAutoResuming && (
                 <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
                   <p className="text-amber-700">
-                    <span className="font-medium">Note:</span> Showing partial results ({results.length} companies) after cancellation.
+                    <span className="font-medium">Note:</span> Showing partial results ({processingState.results.length} companies) after cancellation.
                   </p>
                 </div>
               )}
-              <TopTable />
-              <Histogram />
+              <TopTable results={processingState.results} /> {/* Pass results as prop */}
+              <Histogram results={processingState.results} /> {/* Pass results as prop */}
               <div className="text-center">
                 <button
                   onClick={downloadCSV}

@@ -289,7 +289,7 @@ def score_batch(
 def normalize_csv(csv_content):
     """
     Normalize CSV content to ensure consistent delimiting.
-    Detects header row by looking for "Company Name" and "Informal Name".
+    Detects header row by looking for "Company Name" and uses the best delimiter.
     
     Args:
         csv_content: The raw CSV content as bytes
@@ -307,105 +307,87 @@ def normalize_csv(csv_content):
     normalized_buffer = BytesIO()
     
     try:
-        # Try to decode the content
+        # Decode the content
         try:
             text_content = csv_content.decode('utf-8')
         except UnicodeDecodeError:
             text_content = csv_content.decode('utf-8', errors='replace')
-            print("Decoded with replacement characters")
         
         # Split the content into lines
         lines = text_content.splitlines()
+        print(f"File has {len(lines)} lines total.")
         
-        # Detect the header row by looking for "Company Name" and "Informal Name"
+        # Detect header row by looking for "Company Name"
         header_row_index = -1
-        best_delimiter = ','  # Default delimiter
-        header_fields = []
-        
-        for i, line in enumerate(lines[:10]):  # Only check first 10 rows
-            # Check different possible delimiters
-            for delimiter in [',', '\t', ';', '|']:
-                try:
-                    reader = csv.reader([line], delimiter=delimiter)
-                    fields = list(next(reader))
-                    
-                    # Check if first two fields match our expected header
-                    if len(fields) >= 2:
-                        if "Company Name" in fields[0] and "Informal Name" in fields[1]:
-                            header_row_index = i
-                            best_delimiter = delimiter
-                            header_fields = fields
-                            print(f"Header row detected at line {i+1} using delimiter '{delimiter}'")
-                            break
-                except:
-                    continue
-            
-            if header_row_index >= 0:
+        for i, line in enumerate(lines[:min(10, len(lines))]):
+            if "Company Name" in line:
+                header_row_index = i
+                print(f"Header row detected at line {i+1}")
                 break
         
-        # If header row not found, fallback to row 5 or row 4
+        # If not found, use default (row 5)
         if header_row_index < 0:
             if len(lines) > 4:
-                header_row_index = 4  # Default to row 5 (index 4)
-                for delimiter in [',', '\t', ';', '|']:
-                    try:
-                        reader = csv.reader([lines[header_row_index]], delimiter=delimiter)
-                        fields = list(next(reader))
-                        if len(fields) > len(header_fields):
-                            best_delimiter = delimiter
-                            header_fields = fields
-                    except:
-                        continue
-                print(f"Using default row 5 (index 4) as header")
-            elif len(lines) > 3:
-                header_row_index = 3  # Row 4 (index 3)
-                for delimiter in [',', '\t', ';', '|']:
-                    try:
-                        reader = csv.reader([lines[header_row_index]], delimiter=delimiter)
-                        fields = list(next(reader))
-                        if len(fields) > len(header_fields):
-                            best_delimiter = delimiter
-                            header_fields = fields
-                    except:
-                        continue
-                print(f"Using shorter default row 4 (index 3) as header")
+                header_row_index = 4  # Default to row 5
+                print("Header not detected, using default row 5")
             else:
                 header_row_index = 0
-                print(f"Using first row as header")
+                print("Header not detected and file too short, using row 1")
         
-        # Split data based on detected header
-        metadata_lines = lines[:header_row_index]
-        data_lines = lines[(header_row_index+1):] if header_row_index+1 < len(lines) else []
+        # Get the header line
+        header_line = lines[header_row_index]
         
-        print(f"File has {len(lines)} lines: {len(metadata_lines)} metadata, 1 header, {len(data_lines)} data")
+        # Determine the best delimiter for the header like in the original solution
+        delimiters = [',', '\t', ';', '|']
+        best_delimiter = ','  # Default
+        max_columns = 0
+        header_fields = []
+        
+        # Check which delimiter produces the most fields for the header line
+        for delimiter in delimiters:
+            # Create a CSV reader with this delimiter
+            test_reader = csv.reader([header_line], delimiter=delimiter)
+            fields = list(next(test_reader))
+            
+            print(f"Delimiter '{delimiter}' gives {len(fields)} fields for header")
+            
+            if len(fields) > max_columns:
+                max_columns = len(fields)
+                best_delimiter = delimiter
+                header_fields = fields
+        
+        print(f"Selected delimiter '{best_delimiter}' with {max_columns} columns")
         
         # Setup CSV writer for output
         output = io.StringIO()
         writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
         
         # Write metadata lines as single-column rows
-        for line in metadata_lines:
-            writer.writerow([line])
-        
-        # Write the header
+        for i in range(header_row_index):
+            writer.writerow([lines[i]])
+            
+        # Write the header with properly separated fields
         writer.writerow(header_fields)
         print(f"Processed header with {len(header_fields)} fields")
         
-        # Process data rows with the best delimiter
-        for line in data_lines:
+        # Process the data rows with the same delimiter
+        for i, line in enumerate(lines[header_row_index+1:]):
             try:
-                # Parse the row with the best delimiter
+                # Create a CSV reader with the best delimiter
                 row_reader = csv.reader([line], delimiter=best_delimiter)
                 fields = list(next(row_reader))
                 
                 # Ensure each row has the right number of fields
                 if len(fields) < len(header_fields):
+                    # Pad with empty fields if needed
                     fields.extend([''] * (len(header_fields) - len(fields)))
                 elif len(fields) > len(header_fields):
+                    # Truncate if there are too many fields
                     fields = fields[:len(header_fields)]
                 
                 # Write the normalized row
                 writer.writerow(fields)
+                
             except Exception as e:
                 # For problematic rows, write as a single field
                 writer.writerow([line])
@@ -441,17 +423,19 @@ def stream_analysis(
         csv_content = csv_stream.read()
         print(f"File size: {len(csv_content)} bytes")
         
-        # Create a clean copy and remove BOM if present
+        # Remove BOM if present
         if csv_content.startswith(b'\xef\xbb\xbf'):
             csv_content = csv_content[3:]
             print("Removed BOM from file")
         
-        clean_csv = BytesIO(csv_content)
+        clean_csv = BytesIO()
+        clean_csv.write(csv_content)
         clean_csv.seek(0)
         
-        # Try to parse normally first
+        # Skip examining the file structure directly and apply normalization
+        # This addresses the "Expected 1 fields in line 5, saw 48" error
         try:
-            # Look for a header row containing "Company Name" and "Informal Name"
+            # First try parsing normally, though this may fail
             preview_data = pd.read_csv(
                 clean_csv, 
                 dtype=str, 
@@ -460,12 +444,12 @@ def stream_analysis(
                 encoding='utf-8'
             )
             
-            # Find the header row
+            # Look for header row
             header_row = None
             for i in range(min(10, len(preview_data))):
                 row = preview_data.iloc[i]
-                if len(row) >= 2:
-                    if "Company Name" in str(row[0]) and "Informal Name" in str(row[1]):
+                if len(row) >= 1:
+                    if "Company Name" in str(row[0]):
                         header_row = i
                         print(f"Header row detected at row {i+1}")
                         break
@@ -474,8 +458,8 @@ def stream_analysis(
             if header_row is None:
                 header_row = 4  # Default to row 5
                 print("Header row not detected, using default row 5")
-            
-            # Read the file with the detected header
+                
+            # Try to read with the detected header row
             clean_csv.seek(0)
             all_data = pd.read_csv(
                 clean_csv, 
@@ -488,17 +472,17 @@ def stream_analysis(
             print(f"Successfully read CSV with {len(all_data)} rows and {len(all_data.columns)} columns")
             
         except Exception as e:
-            print(f"Error during CSV parsing: {str(e)}")
-            print("Attempting to normalize the CSV format...")
+            print(f"Error during initial CSV parsing: {type(e).__name__}: {str(e)}")
+            print("Applying normalization to handle the CSV format...")
             
-            # Normalize the CSV to handle delimiter issues
-            clean_csv = normalize_csv(csv_content)
+            # Use the normalize_csv function that implements the successful approach
+            normalized_csv = normalize_csv(csv_content)
             
-            # Try parsing the normalized content
+            # Try parsing the normalized CSV
             all_data = pd.read_csv(
-                clean_csv, 
+                normalized_csv, 
                 dtype=str, 
-                header=0,  # Header is first row in normalized file
+                header=0,  # Header is the first row in normalized CSV
                 encoding='utf-8'
             )
             
@@ -510,7 +494,7 @@ def stream_analysis(
         all_data = all_data.fillna("")
         print(f"Successfully processed file. Found {total_rows} rows")
         
-        # Process in chunks (rest of the function remains the same)
+        # Rest of the function remains the same
         chunk_size = 1000
         for chunk_start in range(0, total_rows, chunk_size):
             chunk_end = min(chunk_start + chunk_size, total_rows)
@@ -559,7 +543,6 @@ def stream_analysis(
         import traceback
         traceback.print_exc()
         yield json.dumps({"error": f"Stream error: {str(e)}"}) + "\n"
-
 ###############################################################################
 # Flask route
 ###############################################################################

@@ -1089,6 +1089,7 @@ return (
         {/* 4. Criteria & weights */}
         <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-6">
           <h2 className="text-xl font-semibold text-navy-800">Define Investing Criteria (editable, pre-filled with some typical criteria)</h2>
+          <p className="text-xs italic text-gray-600 mt-1">Don't worry about typing in Carrick criteria, this is already built into the model on the backend (if analysis run without criteria, a default Carrick market map scoring will be automatically implemented). Input other filtering criteria as necessary for your search, e.g., "place specific focus on governance, risk and compliance companies".</p>
           <textarea
             value={investCriteria}
             onChange={(e) => setInvestCriteria(e.target.value)}

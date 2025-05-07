@@ -47,6 +47,7 @@ export default function VCAnalysisTool() {
   const [results, setResults] = useState([]);
   const [lastError, setLastError] = useState(null); // For error state
   const abortRef = useRef(null);
+  const progressSectionRef = useRef(null);
   const [isAutoResuming, setIsAutoResuming] = useState(false);
   const [canResume, setCanResume] = useState(false);
   const [resumeState, setResumeState] = useState({
@@ -253,6 +254,16 @@ const processData = async (resumeFrom = 0) => {
   } else {
     console.log(`Resuming processing from row ${resumeFrom}`);
   }
+
+  // Scroll to the progress section with smooth behavior
+  setTimeout(() => {
+          if (progressSectionRef.current) {
+            progressSectionRef.current.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'start'
+            });
+          }
+        }, 100);
 
   // Abort controller for multiple runs
   if (abortRef.current) {
@@ -1019,7 +1030,9 @@ return (
 
         {/* Progress */}
         {isProcessing && (
-          <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4">
+          <section 
+              ref={progressSectionRef}
+               className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4">
             <h2 className="text-xl font-semibold text-navy-800">Processing Companies</h2>
             <div className="flex items-center justify-between text-xs font-semibold text-navy-600">
               <span>Progress</span>
@@ -1061,17 +1074,8 @@ return (
   </div>
 )}
 
-{/* Processing resumed notification */}
-{isProcessing && resumeState.progress > 0 && (
-  <div className="mb-4 p-2 bg-navy-50 border border-navy-100 rounded-lg">
-    <p className="text-navy-700 text-sm">
-      Continuing from row {resumeState.progress} of {resumeState.totalRows}
-    </p>
-  </div>
-)}
-
         {/* Results */}
-        {results.length > 0 && !isProcessing && (
+        {results.length > 0 && !isProcessing && progress === 100 && (
           <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
             <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
             <TopTable />

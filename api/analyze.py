@@ -49,7 +49,7 @@ def build_system_prompt(criteria: str) -> str:
     
     - Enterprise B2B technology companies with strong SaaS or recurring revenue models
     - Companies specializing in: cybersecurity, identity management, data analytics, workflow automation, compliance solutions, healthcare technology, and fintech
-    - Firms with approximately 100-500 employees (with some ranging from 50-2,000)
+    - Firms with approximately 80-500 employees (STRICT REQUIREMENT - companies with >1000 employees should receive scores no higher than 3)
     - Primarily located in the US, with some investments in UK, Israel, and Canada
     - Companies that have typically raised between $5M and $150M in total funding
     - Strong emphasis on AI/ML, cloud infrastructure, and specialized industry solutions
@@ -63,6 +63,14 @@ def build_system_prompt(criteria: str) -> str:
     4. Solutions for underserved or rapidly growing market segments
     5. Experienced management teams with domain expertise
     6. Annual growth rates typically exceeding 15%
+    
+    SCORING GUIDELINES:
+    - Companies with >1000 employees should receive scores no higher than 3
+    - Companies with >5000 employees should receive scores no higher than 2
+    - Companies with >10000 employees should receive a score of 0-1
+    - Companies with missing critical data (e.g., N/A for employee count) should receive scores no higher than 4
+    - Companies with clear mismatches to our investment thesis should receive scores of 0-3
+    - Only companies that strongly match our criteria should receive scores of 8-10
     """
     
     # Example companies from portfolio that represent ideal investments
@@ -73,6 +81,9 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Data access governance, SOD monitoring, remediation, continuous controls monitoring, privilege access governance, application GRC, cloud security
     Products/Services: IT Services
     End Markets: Healthcare, Business Services, Education, Finance, Industrials, Government
+    Employee Count: 1276
+    Score: 9
+    Rationale: Strong fit with cybersecurity focus, appropriate size, enterprise SaaS model
     
     Example 2: Exiger
     Description: Software development company focused on supply chain and third-party risk management, audit and assurance, construction monitoring, and program design.
@@ -80,6 +91,9 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Regulatory strategy, compliance governance, financial crime compliance, due diligence, investigations, technology, analytics, artificial intelligence, supply chain risk management
     Products/Services: Software Applications and Web-Based Platforms
     End Markets: Healthcare, Industrials, Business Services, Finance
+    Employee Count: 927
+    Score: 8
+    Rationale: Risk management solution, appropriate size, enterprise customers
     
     Example 3: LegalSifter
     Description: Consulting firm specializing in contract management solutions, offering AI-contract review, customizable document-assembly tools, and contract management services.
@@ -87,6 +101,9 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Contract Management, Law, Natural Language Processing, Machine Learning, Artificial Intelligence, Legal, Contract Review, Document Review
     Products/Services: Software Applications and Web-Based Platforms
     End Markets: Healthcare, Business Services, Education, Industrials, Finance
+    Employee Count: 59
+    Score: 8
+    Rationale: AI-driven legal tech, growing company, strong vertical focus
     
     Example 4: OnPay
     Description: Payroll company specializing in employee payroll, HR automation, and benefits solutions, offering direct deposit, hiring and onboarding, PTO management, and employee self-service.
@@ -94,6 +111,9 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Payroll, HR, benefits, small business, accountants, API
     Products/Services: Contracting Services
     End Markets: Business Services, Healthcare, Education, Consumer Services
+    Employee Count: 186
+    Score: 7
+    Rationale: HR tech focus, appropriate size, scalable solution
     
     Example 5: DailyPay
     Description: Financial service company offering earned wage access enabling employees to access earned income before payday, transforming how businesses pay employees.
@@ -101,6 +121,10 @@ def build_system_prompt(criteria: str) -> str:
     Specialties: Finance as a service, on-demand finance, receivable factoring, financial wellness, fintech, technology
     Products/Services: Financial Services
     End Markets: Business Services, Healthcare
+    Employee Count: 928
+    Score: 7
+    Rationale: Innovative fintech, appropriate size, strong growth potential
+    
     """
     
     return (
@@ -111,11 +135,11 @@ def build_system_prompt(criteria: str) -> str:
         '{"rows":[{"company_name":"Company Name 1", "investability_score":8}, {"company_name":"Company Name 2", "investability_score":5}, ...]}\n\n'
         "Each company MUST have both a company_name and investability_score field.\n\n"
         "VERY IMPORTANT: DO NOT CHANGE THE COMPANY NAMES IN ANY WAY - USE THEM EXACTLY AS PROVIDED. DO NOT EXPAND ABBREIVIATIONS, DO NOT CHANGE CAPITALIZATION, DO NOT CHANGE SPACING OR PUNCTUATION. RETURN THE COMPANY NAMES EXACTLY AS PROVIDED. \n\n"
+        "VERY IMPORTANT: Follow the scoring guidelines precisely. Companies with >1000 employees should get scores no higher than 3. Companies with missing critical data should get scores no higher than 4.\n\n"
         "CARRICK INVESTMENT CONTEXT:\n" + investment_context + "\n\n"
-        "EXAMPLE PORTFOLIO COMPANIES THAT RECEIVED HIGH SCORES:\n" + example_companies + "\n\n"
+        "EXAMPLE PORTFOLIO COMPANIES AND SCORING RATIONALE:\n" + example_companies + "\n\n"
         "Criteria for evaluation:\n" + criteria
     )
-
 def truncate_text(text, max_length):
     """Helper function to truncate text to a maximum length."""
     if not text or len(text) <= max_length:

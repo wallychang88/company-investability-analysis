@@ -47,6 +47,7 @@ export default function VCAnalysisTool() {
   const [results, setResults] = useState([]);
   const [lastError, setLastError] = useState(null); // For error state
   const abortRef = useRef(null);
+  const [isAutoResuming, setIsAutoResuming] = useState(false);
   const [canResume, setCanResume] = useState(false);
   const [resumeState, setResumeState] = useState({
   progress: 0,
@@ -208,7 +209,7 @@ const handleFileUpload = (e) => {
     return bins;
   }, [results]);
 
-  /* ─────────── API Call ─────────── */
+/* ─────────── API Call ─────────── */
 const processData = async (resumeFrom = 0) => {
   setLastError(null);
   
@@ -217,33 +218,33 @@ const processData = async (resumeFrom = 0) => {
     return;
   }
 
-    // Validate required mappings
-    const missing = REQUIRED_COLS.filter((c) => !columnMap[c]);
-    if (missing.length) {
-      const missingNames = missing.map(c => c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()));
-      setLastError(`Please map these required columns: ${missingNames.join(", ")}`);
-      return;
-    }
+  // Validate required mappings
+  const missing = REQUIRED_COLS.filter((c) => !columnMap[c]);
+  if (missing.length) {
+    const missingNames = missing.map(c => c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()));
+    setLastError(`Please map these required columns: ${missingNames.join(", ")}`);
+    return;
+  }
 
-    // Check if we have any rows to process
-    if (parsedData.length === 0) {
-      setLastError("No valid data rows found to process");
-      return;
-    }
+  // Check if we have any rows to process
+  if (parsedData.length === 0) {
+    setLastError("No valid data rows found to process");
+    return;
+  }
 
-    // Validate criteria bullets
-    const bullets = investCriteria
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("•"));
-    
-    if (bullets.length === 0) {
-      setLastError("Please add at least one bullet point (•) criterion");
-      return;
-    }
+  // Validate criteria bullets
+  const bullets = investCriteria
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("•"));
+  
+  if (bullets.length === 0) {
+    setLastError("Please add at least one bullet point (•) criterion");
+    return;
+  }
 
-    // Begin processing
-setIsProcessing(true);
+  // Begin processing
+  setIsProcessing(true);
   if (resumeFrom === 0) {
     // Only reset progress if starting from beginning
     setProgress(0);
@@ -253,18 +254,18 @@ setIsProcessing(true);
     console.log(`Resuming processing from row ${resumeFrom}`);
   }
 
-    // Abort controller for multiple runs
-    if (abortRef.current) {
-      try {
-        abortRef.current.abort();
-      } catch (e) {
-        console.warn("Error aborting previous request:", e);
-      }
+  // Abort controller for multiple runs
+  if (abortRef.current) {
+    try {
+      abortRef.current.abort();
+    } catch (e) {
+      console.warn("Error aborting previous request:", e);
     }
-    const controller = new AbortController();
-    abortRef.current = controller;
+  }
+  const controller = new AbortController();
+  abortRef.current = controller;
 
-const fd = new FormData();
+  const fd = new FormData();
   fd.append("file", file);
   fd.append("columnMap", JSON.stringify(columnMap));
   fd.append("criteria", investCriteria);
@@ -274,17 +275,17 @@ const fd = new FormData();
     fd.append("resumeFrom", resumeFrom.toString());
   }
     
-    // Add weights if available
-    if (criteriaWeights.length > 0) {
-      fd.append("weights", JSON.stringify(
-        criteriaWeights.reduce((obj, item) => {
-          obj[item.label] = item.weight;
-          return obj;
-        }, {})
-      ));
-    }
+  // Add weights if available
+  if (criteriaWeights.length > 0) {
+    fd.append("weights", JSON.stringify(
+      criteriaWeights.reduce((obj, item) => {
+        obj[item.label] = item.weight;
+        return obj;
+      }, {})
+    ));
+  }
 
-    try {
+  try {
     const res = await fetch("/api/analyze", { 
       method: "POST", 
       body: fd, 
@@ -312,6 +313,8 @@ const fd = new FormData();
     }
   } finally {
     setIsProcessing(false);
+    // Clear the auto-resuming state when processing is complete
+    setIsAutoResuming(false);
   }
 };
 
@@ -388,7 +391,7 @@ const fd = new FormData();
       xhr.send(body);
     });
 
-/* ─────────── Merge payload from server ─────────── */
+/* ─────────── Complete updated handlePayload function with auto-resume ─────────── */
 const handlePayload = (data) => {
   if (!data) return;
   
@@ -397,7 +400,7 @@ const handlePayload = (data) => {
     return;
   }
   
-  // Handle timeout status from the server - this works with your EXISTING backend code
+  // Handle timeout status from the server
   if (data.status === 'timeout') {
     console.log("Server timeout detected, enabling auto-resume capability");
     const progress = data.progress || 0;
@@ -408,31 +411,39 @@ const handlePayload = (data) => {
       totalRows: totalRows
     });
     
+    // Set the auto-resuming state to true
+    setIsAutoResuming(true);
+    
     // Add auto-resume functionality - this is all we need to add
     // Add a small delay to ensure the UI reflects the current state before resuming
     setTimeout(() => {
       console.log(`Auto-resuming processing from row ${progress}`);
       processData(progress);
+      // Note: setIsAutoResuming will be set to false when processing completes
+      // in the finally block of processData
     }, 2000);
     
-    // Still set canResume in case auto-resume fails and manual intervention is needed
+    // We still need this for backward compatibility
     setCanResume(true);
     setLastError("Processing timed out. Auto-resuming in 2 seconds...");
     return;
   }
   
-  // The rest of your existing handlePayload function remains unchanged
+  // Handle status updates
   if (data.status === 'starting' || data.status === 'resuming') {
     console.log(`Analysis ${data.status} with ${data.total_rows} total rows`);
+    // Update total rows if provided
     if (data.total_rows) {
       setResumeState(prev => ({...prev, totalRows: data.total_rows}));
     }
   }
   
+  // Handle chunk status
   if (data.status === 'chunk_complete' && Array.isArray(data.result)) {
     console.log(`Received chunk with ${data.result.length} results`);
     
     if (data.result.length > 0) {
+      // Check for valid data before updating
       const validResults = data.result.filter(r => 
         r.company_name && typeof r.investability_score !== 'undefined'
       );
@@ -440,13 +451,18 @@ const handlePayload = (data) => {
       console.log(`Filtered to ${validResults.length} valid results`);
       
       if (validResults.length > 0) {
+        // Update results state
         setResults(prev => {
+          // Filter out duplicates
           const newResults = [...prev];
           validResults.forEach(result => {
+            // Check if this company is already in results
             const existingIndex = newResults.findIndex(r => r.company_name === result.company_name);
             if (existingIndex >= 0) {
+              // Update existing entry
               newResults[existingIndex] = result;
             } else {
+              // Add new entry
               newResults.push(result);
             }
           });
@@ -458,10 +474,15 @@ const handlePayload = (data) => {
     }
   }
   
+  // Handle progress updates
   if (typeof data.progress === "number") {
+    // Always update progress counter for UX feedback
     setResultCount(data.progress);
+    
+    // Update resume state
     setResumeState(prev => ({...prev, progress: data.progress}));
     
+    // Calculate progress percentage
     const totalForCalc = data.total_rows || resumeState.totalRows || parsedData.length;
     const progressPercent = Math.min(100, Math.round((data.progress / totalForCalc) * 100));
     setProgress(progressPercent);
@@ -1028,32 +1049,23 @@ return (
           </section>
         )}
 
-{/* Add this to your UI, perhaps under the progress */}
-{canResume && !isProcessing && (
-  <div className="text-center mt-4">
-    <p className="text-amber-600 mb-2">Processing timed out due to Vercel's 60-second limit.</p>
-    <div className="animate-pulse bg-navy-50 rounded-lg p-4 mb-3">
-      <p className="text-navy-700">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        Auto-resuming from row {resumeState.progress}...
-      </p>
+{/* Auto-resuming notification */}
+{isAutoResuming && !isProcessing && (
+  <div className="text-center mt-4 mb-4">
+    <div className="bg-navy-50 rounded-lg p-3 border border-navy-100 inline-flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-navy-600 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      <span className="text-navy-700">Auto-resuming from row {resumeState.progress}...</span>
     </div>
-    <button
-      onClick={() => processData(resumeState.progress)}
-      className="px-6 py-3 bg-navy-600 text-white font-medium rounded-lg hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-300 shadow-md"
-    >
-      Manually Resume If Needed
-    </button>
   </div>
 )}
 
-{/* Add a simple notification when auto-resumed */}
+{/* Processing resumed notification */}
 {isProcessing && resumeState.progress > 0 && (
-  <div className="mb-4 p-3 bg-navy-50 border border-navy-200 rounded-lg">
-    <p className="text-navy-700">
-      <span className="font-medium">Auto-resumed:</span> Processing from row {resumeState.progress} of {resumeState.totalRows}
+  <div className="mb-4 p-2 bg-navy-50 border border-navy-100 rounded-lg">
+    <p className="text-navy-700 text-sm">
+      Continuing from row {resumeState.progress} of {resumeState.totalRows}
     </p>
   </div>
 )}

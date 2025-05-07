@@ -1029,66 +1029,65 @@ return (
         </div>
 
         {/* Progress */}
-        {isProcessing && (
-          <section 
-              ref={progressSectionRef}
-               className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4">
-            <h2 className="text-xl font-semibold text-navy-800">Processing Companies</h2>
-            <div className="flex items-center justify-between text-xs font-semibold text-navy-600">
-              <span>Progress</span>
-              <span>
-                {resultCount} / {parsedData.length}
-              </span>
-            </div>
-            <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-navy-600 transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="text-center text-sm text-gray-500">
-              {progress < 100 ? "Analyzing…" : "Analysis complete!"}
-            </p>
-            <button
-              onClick={() => {
-                if (abortRef.current) {
-                  abortRef.current.abort();
-                }
-              }}
-              className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
-            >
-              Cancel
-            </button>
-          </section>
-        )}
-
-{/* Auto-resuming notification */}
-{isAutoResuming && !isProcessing && (
-  <div className="text-center mt-4 mb-4">
-    <div className="bg-navy-50 rounded-lg p-3 border border-navy-100 inline-flex items-center">
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-navy-600 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-      <span className="text-navy-700">Auto-resuming from row {resumeState.progress}...</span>
+        {(isProcessing || isAutoResuming) && (
+  <section 
+    ref={progressSectionRef}
+    className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4"
+  >
+    <h2 className="text-xl font-semibold text-navy-800">Processing Companies</h2>
+    <div className="flex items-center justify-between text-xs font-semibold text-navy-600">
+      <span>Progress</span>
+      <span>
+        {resultCount} / {parsedData.length}
+      </span>
     </div>
-  </div>
+    <div className="w-full h-3 bg-navy-100 rounded-full overflow-hidden">
+      <div
+        className="h-full bg-navy-600 transition-all duration-500"
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+    <p className="text-center text-sm text-gray-500">
+      {isAutoResuming ? "Auto-resuming..." : (progress < 100 ? "Analyzing…" : "Analysis complete!")}
+    </p>
+    {isProcessing && (
+      <button
+        onClick={() => {
+          if (abortRef.current) {
+            abortRef.current.abort();
+          }
+        }}
+        className="mx-auto block px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+      >
+        Cancel
+      </button>
+    )}
+  </section>
 )}
 
-        {/* Results */}
-        {results.length > 0 && !isProcessing && progress === 100 && (
-          <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
-            <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
-            <TopTable />
-            <Histogram />
-            <div className="text-center">
-              <button
-                onClick={downloadCSV}
-                className="mt-4 px-6 py-3 bg-navy-700 text-white font-medium rounded-lg hover:bg-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-500 shadow-md"
-              >
-                Download Results CSV
-              </button>
-            </div>
-          </section>
+        {/* Results - Show when processing is complete OR when user cancels with some results */}
+          {results.length > 0 && !isProcessing && (progress === 100 || resultCount > 0) && (
+            <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
+              <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>
+              {progress < 100 && (
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
+                  <p className="text-amber-700">
+                    <span className="font-medium">Note:</span> Showing partial results ({results.length} companies) after cancellation.
+                  </p>
+                </div>
+              )}
+              <TopTable />
+              <Histogram />
+              <div className="text-center">
+                <button
+                  onClick={downloadCSV}
+                  className="mt-4 px-6 py-3 bg-navy-700 text-white font-medium rounded-lg hover:bg-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-500 shadow-md"
+                >
+                  Download Results CSV
+                </button>
+              </div>
+            </section>
+          )}
         )}
       </div>
     </div>

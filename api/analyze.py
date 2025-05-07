@@ -506,6 +506,56 @@ def stream_analysis(
         total_rows = len(all_data)
         all_data = all_data.fillna("")
         print(f"Successfully processed file. Found {total_rows} total rows in CSV")
+        
+        # Process in chunks
+        chunk_size = 1000
+        for chunk_start in range(0, total_rows, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, total_rows)
+            chunk = all_data.iloc[chunk_start:chunk_end]
+            num_rows = len(chunk)
+            
+            for start in range(0, num_rows, BATCH_SIZE):
+                end = min(start + BATCH_SIZE, num_rows)
+                batch = chunk.iloc[start:end]
+                batch_size = len(batch)
+                
+                print(f"Processing batch: rows {start+1}-{end} (batch size: {batch_size})")
+
+                try:
+                    # Get company scores from OpenAI
+                    rows = score_batch(batch, column_map, criteria)
+                    
+                    # Create response payload with rows
+                    payload = {
+                        "progress": processed + batch_size,
+                        "result": rows
+                    }
+                    
+                    processed_pct = round((processed + batch_size) / total_rows * 100)
+                    print(f"Progress: {processed + batch_size}/{total_rows} ({processed_pct}%)")
+                    
+                except APIError as e:
+                    print(f"OpenAI API error: {type(e).__name__}: {str(e)}")
+                    payload = {
+                        "progress": processed + batch_size,
+                        "error": f"OpenAI error: {e.__class__.__name__}: {e}",
+                    }
+                except Exception as e:
+                    print(f"Unexpected error in batch processing: {type(e).__name__}: {str(e)}")
+                    payload = {
+                        "progress": processed + batch_size,
+                        "error": f"Error: {type(e).__name__}: {str(e)}",
+                    }
+
+                processed += batch_size
+                json_payload = json.dumps(payload)
+                
+                yield json_payload + "\n"
+    except Exception as e:
+        print(f"Stream analysis error: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        yield json.dumps({"error": f"Stream error: {str(e)}"}) + "\n"
 
 ###############################################################################
 # Flask route

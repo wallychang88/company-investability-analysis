@@ -49,7 +49,7 @@ def build_system_prompt(criteria: str) -> str:
         "IMPORTANT: You must return your analysis in VALID JSON format with this exact structure:\n"
         '{"rows":[{"company_name":"Company Name 1", "investability_score":8}, {"company_name":"Company Name 2", "investability_score":5}, ...]}\n\n'
         "Each company MUST have both a company_name and investability_score field.\n\n"
-        "DO NOT change the company names in any way - use them exactly as provided.\n\n"
+        "VERY IMPORTANT: DO NOT CHANGE THE COMPANY NAMES IN ANY WAY - USE THEM EXACTLY AS PROVIDED. DO NOT EXPAND ABBREIVIATIONS, DO NOT CHANGE CAPITALIZATION, DO NOT CHANGE SPACING OR PUNCTUATION. RETURN THE COMPANY NAMES EXACTLY AS PROVIDED. \n\n"
         "Criteria for evaluation:\n" + criteria
     )
 

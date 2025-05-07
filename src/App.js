@@ -638,8 +638,21 @@ const TopTable = () => {
         // Get the company name from the result
         const companyName = result.company_name;
         
-        // Check if company name is blank/empty
-        const isNameBlank = !companyName || companyName.trim() === '';
+        // Need to check if we have a REAL company name by checking original data
+        let originalRow = null;
+        
+        // Try to find the original row this result came from
+        if (columnMap.company_name) {
+          originalRow = parsedData.find(row => row[columnMap.company_name] === companyName);
+        }
+        
+        // Check if this is actually from the company name field, or if the backend used description as fallback
+        const hasRealCompanyName = !!(originalRow && columnMap.company_name);
+        
+        // Consider company name blank if:
+        // 1. The name itself is blank, OR
+        // 2. We couldn't find this exact name in the company_name column (meaning backend used description instead)
+        const isNameBlank = !companyName || companyName.trim() === '' || !hasRealCompanyName;
         
         // Find the original company data using multiple matching strategies
         let originalData = null;
@@ -703,6 +716,7 @@ const TopTable = () => {
           : 'N/A';
         
         // For blank company names, use "NAME FIELD BLANK (Row #)" format
+        // The row number corresponds to the index in the results array + 1 (for 1-based indexing)
         const displayName = isNameBlank 
           ? `NAME FIELD BLANK (Row ${index + 1})` 
           : companyName;

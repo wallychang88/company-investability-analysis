@@ -111,14 +111,14 @@ def score_batch(
     for idx, (_, row) in enumerate(df_slice.iterrows()):
         print(f"Processing row {idx+1}")
         
-        # Get company name (from designated company_name field)
+        # Get company name from the designated company_name field only
         name_col = column_map.get("company_name", "")
             
         # Safe row access
         company_name = ""
         if name_col and name_col in row:
             company_name = row[name_col]
-       
+            
         # Use placeholder for blank company names
         if not company_name or company_name.strip() == "":
             company_name = f"NAME FIELD BLANK (Row {idx+1})"
@@ -127,13 +127,10 @@ def score_batch(
         
         company_names.append(company_name)  # Store exact name for later matching
         
-        # Get description without truncation
-        description = row[desc_col] if desc_col in row else ''
-        
         # Start with mandatory fields - more concise format
         company_data = [f"Company: {company_name}"]
         
-        # Add mandatory fields (without truncating description)
+        # Add mandatory fields
         emp_col = column_map.get('employee_count', '')
         ind_col = column_map.get('industries', '')
         spec_col = column_map.get('specialties', '')
@@ -144,6 +141,10 @@ def score_batch(
         total_raised_col = column_map.get('total_raised', '')
         latest_raised_col = column_map.get('latest_raised', '')
         recent_investment_col = column_map.get('date_of_most_recent_investment', '')
+        
+        # Get description field for data 
+        desc_col = column_map.get("description", "")
+        description = row[desc_col] if desc_col in row else ''
         
         # Safe data access with existence check for each column
         fields = {

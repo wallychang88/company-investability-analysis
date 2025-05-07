@@ -420,11 +420,15 @@ const handlePayload = (data) => {
   
   // Handle chunk status
   if (data.status === 'chunk_complete' && Array.isArray(data.result)) {
+    console.log(`Received chunk with ${data.result.length} results`);
+    
     if (data.result.length > 0) {
       // Check for valid data before updating
       const validResults = data.result.filter(r => 
         r.company_name && typeof r.investability_score !== 'undefined'
       );
+      
+      console.log(`Filtered to ${validResults.length} valid results`);
       
       if (validResults.length > 0) {
         // Update results state
@@ -443,6 +447,7 @@ const handlePayload = (data) => {
             }
           });
           
+          console.log(`Total results after update: ${newResults.length}`);
           return newResults;
         });
       }
@@ -628,92 +633,104 @@ const TopTable = () => {
     // Early return if no results
     if (results.length === 0) return [];
     
-    // Get all results sorted by score
-    return results
-      .slice()
-      .sort((a, b) => b.investability_score - a.investability_score)
-      .map((result, index) => {
-        // Get the company name from the result
-        let companyName = result.company_name;
+    console.log("Processing results for display table:", results.length, "total items");
+    
+    // Create a copy to avoid mutations and apply sorting
+    const sortedResults = [...results].sort((a, b) => {
+      // Special handling for -1 scores
+      if (a.investability_score === -1 && b.investability_score !== -1) return 1;
+      if (a.investability_score !== -1 && b.investability_score === -1) return -1;
+      // For all other scores, sort in descending order
+      return b.investability_score - a.investability_score;
+    });
+    
+    console.log("After sorting, sorted results length:", sortedResults.length);
+    
+    // Process each result into a display object
+    return sortedResults.map((result, index) => {
+      // Get the company name from the result
+      let companyName = result.company_name;
+      
+      // Check if company name is blank/empty
+      const isNameBlank = !companyName || companyName.trim() === '';
+      
+      // Find the original company data using multiple matching strategies
+      let originalData = null;
+      
+      // First try exact match on description field
+      if (columnMap.description) {
+        originalData = parsedData.find(row => row[columnMap.description] === companyName);
+      }
+      
+      // If no match, try exact match on company_name field
+      if (!originalData && columnMap.company_name) {
+        originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
+      }
+      
+      // If still no match, try case-insensitive contains match
+      if (!originalData && columnMap.description) {
+        originalData = parsedData.find(row => {
+          const desc = row[columnMap.description];
+          return desc && desc.toLowerCase().includes(companyName.toLowerCase());
+        });
+      }
+      
+      // If still no match, try case-insensitive match on any column
+      if (!originalData) {
+        originalData = parsedData.find(row => {
+          return Object.values(row).some(value => 
+            value && typeof value === 'string' && 
+            value.toLowerCase().includes(companyName.toLowerCase())
+          );
+        });
+      }
+      
+      // Default to empty object if still no match
+      originalData = originalData || {};
+      
+      // Find website URL if it exists
+      const websiteCol = headers.find(h => 
+        h.toLowerCase() === 'website' || 
+        h.toLowerCase() === 'url' || 
+        h.toLowerCase() === 'web' || 
+        h.toLowerCase() === 'company url'
+      );
+      
+      const websiteUrl = websiteCol && originalData[websiteCol] ? originalData[websiteCol] : '';
+      
+      // Format website URL - ensure it has http/https
+      let formattedUrl = websiteUrl;
+      if (formattedUrl && !formattedUrl.startsWith('http')) {
+        formattedUrl = 'https://' + formattedUrl;
+      }
+      
+      // Look specifically for "Founding Year" in the CSV
+      let foundingYear = 'N/A';
+      if (originalData["Founding Year"] && originalData["Founding Year"].trim()) {
+        foundingYear = originalData["Founding Year"];
+      }
         
-        // Check if company name is blank/empty (marked as "COMPANY NAME BLANK" by the backend)
-        const isNameBlank = !companyName || companyName.trim() === '' || companyName === "COMPANY NAME BLANK";
-        
-        // Find the original company data using multiple matching strategies
-        let originalData = null;
-        
-        // First try exact match on description field
-        if (columnMap.description) {
-          originalData = parsedData.find(row => row[columnMap.description] === companyName);
-        }
-        
-        // If no match, try exact match on company_name field
-        if (!originalData && columnMap.company_name) {
-          originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
-        }
-        
-        // If still no match, try case-insensitive contains match
-        if (!originalData && columnMap.description) {
-          originalData = parsedData.find(row => {
-            const desc = row[columnMap.description];
-            return desc && desc.toLowerCase().includes(companyName.toLowerCase());
-          });
-        }
-        
-        // If still no match, try case-insensitive match on any column
-        if (!originalData) {
-          originalData = parsedData.find(row => {
-            return Object.values(row).some(value => 
-              value && typeof value === 'string' && 
-              value.toLowerCase().includes(companyName.toLowerCase())
-            );
-          });
-        }
-        
-        // Default to empty object if still no match
-        originalData = originalData || {};
-        
-        // Find website URL if it exists
-        const websiteCol = headers.find(h => 
-          h.toLowerCase() === 'website' || 
-          h.toLowerCase() === 'url' || 
-          h.toLowerCase() === 'web' || 
-          h.toLowerCase() === 'company url'
-        );
-        
-        const websiteUrl = websiteCol && originalData[websiteCol] ? originalData[websiteCol] : '';
-        
-        // Format website URL - ensure it has http/https
-        let formattedUrl = websiteUrl;
-        if (formattedUrl && !formattedUrl.startsWith('http')) {
-          formattedUrl = 'https://' + formattedUrl;
-        }
-        
-        // Look specifically for "Founding Year" in the CSV
-        let foundingYear = 'N/A';
-        if (originalData["Founding Year"] && originalData["Founding Year"].trim()) {
-          foundingYear = originalData["Founding Year"];
-        }
-          
-        // Get employee count
-        const employeeCount = columnMap.employee_count && originalData[columnMap.employee_count]
-          ? originalData[columnMap.employee_count]
-          : 'N/A';
-        
-        // For blank company names, use "NAME FIELD BLANK (Row #)" format
-        const displayName = isNameBlank 
-          ? `NAME FIELD BLANK (Row ${index + 1})` 
-          : companyName;
-        
-        return {
-          name: displayName,
-          foundingYear,
-          employeeCount,
-          website: formattedUrl,
-          score: result.investability_score
-        };
-      });
+      // Get employee count
+      const employeeCount = columnMap.employee_count && originalData[columnMap.employee_count]
+        ? originalData[columnMap.employee_count]
+        : 'N/A';
+      
+      // For blank company names, use "NAME FIELD BLANK (Row #)" format
+      const displayName = isNameBlank 
+        ? `NAME FIELD BLANK (Row ${index + 1})` 
+        : companyName;
+      
+      return {
+        name: displayName,
+        foundingYear,
+        employeeCount,
+        website: formattedUrl,
+        score: result.investability_score
+      };
+    });
   }, [results, parsedData, columnMap, headers]);
+
+  console.log("Rendered companies count:", topCompanies.length);
 
   return (
     <div>
@@ -754,7 +771,7 @@ const TopTable = () => {
                       ) : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700 font-bold">
-          <span className={`inline-block px-3 py-1 rounded-full ${
+                      <span className={`inline-block px-3 py-1 rounded-full ${
                         company.score >= 7 ? "bg-green-100 text-green-800" : 
                         company.score >= 4 ? "bg-yellow-100 text-yellow-800" : 
                         company.score === -1 ? "bg-gray-100 text-gray-800" :

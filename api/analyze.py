@@ -24,7 +24,7 @@ CORS(app, origins=["https://company-investability-score.vercel.app", "http://loc
 ###############################################################################
 
 MODEL_NAME = "gpt-4o-mini"  
-MAX_TOKENS = 1024
+MAX_TOKENS = 1500
 TEMPERATURE = 0.2
 BATCH_SIZE = 2  # rows / OpenAI request
 TIMEOUT = 30  # seconds
@@ -41,7 +41,68 @@ client = OpenAI(api_key=api_key, timeout=TIMEOUT)
 ###############################################################################
 
 def build_system_prompt(criteria: str) -> str:
-    """Returns the system prompt with user‑supplied criteria embedded."""
+    """Returns the system prompt with user‑supplied criteria embedded and Carrick investment context."""
+    
+    # Investment context derived from Carrick portfolio analysis
+    investment_context = """
+    Representative investments in our portfolio typically include:
+    
+    - Enterprise B2B technology companies with strong SaaS or recurring revenue models
+    - Companies specializing in: cybersecurity, identity management, data analytics, workflow automation, compliance solutions, healthcare technology, and fintech
+    - Firms with approximately 100-500 employees (with some ranging from 50-2,000)
+    - Primarily located in the US, with some investments in UK, Israel, and Canada
+    - Companies that have typically raised between $5M and $150M in total funding
+    - Strong emphasis on AI/ML, cloud infrastructure, and specialized industry solutions
+    - Focus on regulated industries including healthcare, financial services, and legal
+    - Companies addressing critical security, compliance, operational efficiency, and financial access needs
+    
+    High-scoring companies typically demonstrate:
+    1. Clear product-market fit with enterprise customers
+    2. Recurring revenue models with strong retention metrics
+    3. Technology that addresses critical business needs with measurable ROI
+    4. Solutions for underserved or rapidly growing market segments
+    5. Experienced management teams with domain expertise
+    6. Annual growth rates typically exceeding 15%
+    """
+    
+    # Example companies from portfolio that represent ideal investments
+    example_companies = """
+    Example 1: Saviynt
+    Description: Leading provider of identity security solutions, offering cloud identity management, privileged access management, and application access governance.
+    Industries: Computer & Network Security
+    Specialties: Data access governance, SOD monitoring, remediation, continuous controls monitoring, privilege access governance, application GRC, cloud security
+    Products/Services: IT Services
+    End Markets: Healthcare, Business Services, Education, Finance, Industrials, Government
+    
+    Example 2: Exiger
+    Description: Software development company focused on supply chain and third-party risk management, audit and assurance, construction monitoring, and program design.
+    Industries: Computer Software
+    Specialties: Regulatory strategy, compliance governance, financial crime compliance, due diligence, investigations, technology, analytics, artificial intelligence, supply chain risk management
+    Products/Services: Software Applications and Web-Based Platforms
+    End Markets: Healthcare, Industrials, Business Services, Finance
+    
+    Example 3: LegalSifter
+    Description: Consulting firm specializing in contract management solutions, offering AI-contract review, customizable document-assembly tools, and contract management services.
+    Industries: Law Practice & Legal Services
+    Specialties: Contract Management, Law, Natural Language Processing, Machine Learning, Artificial Intelligence, Legal, Contract Review, Document Review
+    Products/Services: Software Applications and Web-Based Platforms
+    End Markets: Healthcare, Business Services, Education, Industrials, Finance
+    
+    Example 4: OnPay
+    Description: Payroll company specializing in employee payroll, HR automation, and benefits solutions, offering direct deposit, hiring and onboarding, PTO management, and employee self-service.
+    Industries: Human Resources, Staffing, & Recruiting
+    Specialties: Payroll, HR, benefits, small business, accountants, API
+    Products/Services: Contracting Services
+    End Markets: Business Services, Healthcare, Education, Consumer Services
+    
+    Example 5: DailyPay
+    Description: Financial service company offering earned wage access enabling employees to access earned income before payday, transforming how businesses pay employees.
+    Industries: Investment Banking, Banking
+    Specialties: Finance as a service, on-demand finance, receivable factoring, financial wellness, fintech, technology
+    Products/Services: Financial Services
+    End Markets: Business Services, Healthcare
+    """
+    
     return (
         "You are an expert venture analyst. Your task is to evaluate companies based on the investment criteria provided below.\n\n"
         "For each company in the input, you MUST assign an investability score from 0 to 10 (integer only).\n\n"
@@ -50,6 +111,8 @@ def build_system_prompt(criteria: str) -> str:
         '{"rows":[{"company_name":"Company Name 1", "investability_score":8}, {"company_name":"Company Name 2", "investability_score":5}, ...]}\n\n'
         "Each company MUST have both a company_name and investability_score field.\n\n"
         "VERY IMPORTANT: DO NOT CHANGE THE COMPANY NAMES IN ANY WAY - USE THEM EXACTLY AS PROVIDED. DO NOT EXPAND ABBREIVIATIONS, DO NOT CHANGE CAPITALIZATION, DO NOT CHANGE SPACING OR PUNCTUATION. RETURN THE COMPANY NAMES EXACTLY AS PROVIDED. \n\n"
+        "CARRICK INVESTMENT CONTEXT:\n" + investment_context + "\n\n"
+        "EXAMPLE PORTFOLIO COMPANIES THAT RECEIVED HIGH SCORES:\n" + example_companies + "\n\n"
         "Criteria for evaluation:\n" + criteria
     )
 

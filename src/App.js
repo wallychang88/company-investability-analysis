@@ -52,6 +52,7 @@ export default function VCAnalysisTool() {
   resultCount: 0,
   results: [],
   canResume: false,
+  inTransition: false,
   lastError: null,
   allResultsProcessed: false, 
   resumeState: {
@@ -385,23 +386,16 @@ const processData = async (resumeFrom = 0) => {
     }
   } 
   finally {
-  // Don't reset isAutoResuming if we're about to auto-resume
-  setProcessingState(prev => {
-    // Check if we're in an auto-resume transition (has timeout error)
-    if (prev.lastError && prev.lastError.includes("Auto-resuming")) {
-      return {
-        ...prev,
-        isProcessing: false
-        // Keep isAutoResuming true during transition
-      };
-    } else {
-      return {
-        ...prev,
-        isProcessing: false,
-        isAutoResuming: false
-      };
-    }
-  });
+  // Check if a timeout was received while processing
+  // This helps prevent state inconsistencies by not resetting flags prematurely
+  if (!processingState.isAutoResuming) {
+    setProcessingState(prev => ({
+      ...prev,
+      isProcessing: false,
+      isAutoResuming: false,
+      inTransition: false
+    }));
+  }
 }
 };
 
@@ -492,15 +486,24 @@ const handlePayload = (data) => {
   
   // Handle timeout status from the server
   if (data.status === 'timeout') {
-    console.log("Server timeout detected, enabling auto-resume capability");
-    const progress = data.progress || 0;
-    const totalRows = data.total_rows || parsedData.length;
-    
+  console.log("Server timeout detected, enabling auto-resume capability");
+  const progress = data.progress || 0;
+  const totalRows = data.total_rows || parsedData.length;
+  
+  // First, set transition flag immediately to prevent UI flickering
+  setProcessingState(prev => ({
+    ...prev,
+    inTransition: true // Mark that we're in a transition period
+  }));
+  
+  // Short delay to ensure transition state is applied
+  setTimeout(() => {
     // Update all processing flags in a single atomic update
     setProcessingState(prev => ({
       ...prev,
       isProcessing: true,
       isAutoResuming: true,
+      inTransition: false, // No longer in transition, now in auto-resume
       canResume: true,
       lastError: null,
       wasCancelled: false,  // Ensure wasCancelled is false during auto-resume
@@ -510,21 +513,18 @@ const handlePayload = (data) => {
       }
     }));
     
-    // Add auto-resume functionality
-    setTimeout(() => {
-  console.log(`Auto-resuming processing from row ${progress}`);
+setTimeout(() => {
+  // Update all processing flags in a single atomic update
+  setProcessingState(prev => ({...}));
   
-  // Force isAutoResuming to true right before processData
-  setProcessingState(prev => ({
-    ...prev,
-    isAutoResuming: true
-  }));
+  setTimeout(() => {
+    console.log(`Auto-resuming processing from row ${progress}`);
+    processData(progress);
+  }, 2000);
+}, 100); // Add this closing bracket and timeout value
   
-  processData(progress);
-}, 2000);
-    
-    return;
-  }
+return;
+}
   
   // Handle status updates
   if (data.status === 'starting' || data.status === 'resuming') {
@@ -1163,10 +1163,10 @@ return (
           {parsedData.length > 0 ? (
             <button
               onClick={processData}
-              disabled={processingState.isProcessing || processingState.isAutoResuming}
+              disabled={processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition}
               className="px-8 py-4 bg-navy-800 text-white text-lg font-medium rounded-xl hover:bg-navy-900 disabled:opacity-50 shadow-lg"
             >
-              {(processingState.isProcessing || processingState.isAutoResuming) ? "Processing…" : "Analyze Companies"}
+              {(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) ? "Processing…" : "Analyze Companies"}
             </button>
           ) : file ? (
             <p className="text-sm text-red-600 mt-2">No data rows were found in your file</p>
@@ -1176,7 +1176,7 @@ return (
         </div>
 
         {/* Progress */}
-          {(processingState.isProcessing || processingState.isAutoResuming) && (
+          {(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) && (
             <section 
               ref={progressSectionRef}
               className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-4"
@@ -1219,7 +1219,7 @@ return (
 
         {/* Results - Show when processing is complete OR when user cancels with some results */}
          {processingState.results.length > 0 && 
-              !(processingState.isProcessing || processingState.isAutoResuming) &&
+              !(processingState.isProcessing || processingState.isAutoResuming || processingState.inTransition) &&
               ((processingState.progress === 100 && processingState.allResultsProcessed) || processingState.wasCancelled) && (
               <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-8 overflow-x-auto">
                 <h2 className="text-xl font-semibold text-navy-800">Analysis Results</h2>

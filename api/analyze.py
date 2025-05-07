@@ -767,36 +767,34 @@ def analyze_endpoint():
     
     # Set a max execution time for Vercel's 60-second limit
     def timeout_generator(generator, max_time=50):  # 50 seconds to be safe
-    start_time = time.time()
-    last_progress = 0  # Track last known progress
-    total_rows = 0     # Track total rows
-    
-    # Try to process as much as possible within the time limit
-    for item in generator:
-        # Extract progress from yielded items if possible
-        try:
-            data = json.loads(item.strip())
-            if "progress" in data:
-                last_progress = data["progress"]
-            if "total_rows" in data:
-                total_rows = data["total_rows"]
-        except:
-            pass
-            
-        yield item
+        start_time = time.time()
+        last_progress = 0  # Track last known progress
         
-        # Check if we're approaching the time limit
-        if time.time() - start_time > max_time:
-            # Send a special message indicating we're timing out with enhanced info
-            timeout_msg = json.dumps({
-                "status": "timeout",
-                "message": "Processing timeout reached. Auto-resuming...",
-                "progress": last_progress,
-                "total_rows": total_rows,
-                "auto_resume": True  # Flag to indicate auto-resume capability
-            }) + "\n"
-            yield timeout_msg
-            break
+        # Try to process as much as possible within the time limit
+        for item in generator:
+            # Extract progress from yielded items if possible
+            try:
+                data = json.loads(item.strip())
+                if "progress" in data:
+                    last_progress = data["progress"]
+                if "total_rows" in data:
+                    total_rows = data["total_rows"]
+            except:
+                pass
+                
+            yield item
+            
+            # Check if we're approaching the time limit
+            if time.time() - start_time > max_time:
+                # Send a special message indicating we're timing out
+                timeout_msg = json.dumps({
+                    "status": "timeout",
+                    "message": "Processing timeout reached. You can resume from where processing stopped.",
+                    "progress": last_progress,
+                    "total_rows": total_rows if 'total_rows' in locals() else 0
+                }) + "\n"
+                yield timeout_msg
+                break
     
     # Wrap the stream with timeout handling
     timeout_stream = timeout_generator(ndjson_stream)

@@ -288,8 +288,8 @@ def score_batch(
 
 def normalize_csv(csv_content):
     """
-    Normalize CSV content to ensure consistent delimiting.
-    Specially handles SourceScrub CSV files which have metadata rows followed by a header row.
+    Normalize CSV content with intelligent header detection.
+    Looks for a row containing "Company Name" and "Informal Name" as the header.
     
     Args:
         csv_content: The raw CSV content as bytes
@@ -323,20 +323,52 @@ def normalize_csv(csv_content):
         
         # Split the content into lines
         lines = text_content.splitlines()
-        
-        # SourceScrub specific: First 4 lines are metadata, 5th line is header
-        metadata_lines = lines[:4] if len(lines) >= 4 else []
-        header_line = lines[4] if len(lines) > 4 else ""
-        data_lines = lines[5:] if len(lines) > 5 else []
-        
         print(f"File has {len(lines)} lines total.")
-        print(f"Identified {len(metadata_lines)} metadata lines, 1 header line, and {len(data_lines)} data lines.")
+        
+        # Detect the header row by looking for "Company Name" and "Informal Name"
+        header_row_index = -1
+        
+        for i, line in enumerate(lines):
+            # Check different possible delimiters
+            for delimiter in [',', '\t', ';', '|']:
+                try:
+                    reader = csv.reader([line], delimiter=delimiter)
+                    fields = next(reader)
+                    # Check if first two fields match our expected header
+                    if len(fields) >= 2 and "Company Name" in fields[0] and "Informal Name" in fields[1]:
+                        header_row_index = i
+                        print(f"Header row detected at line {i+1} using delimiter '{delimiter}'")
+                        break
+                except:
+                    continue
+            
+            if header_row_index >= 0:
+                break
+        
+        # If header row not found, fallback to row 4 (index 3) or row 5 (index 4)
+        if header_row_index < 0:
+            if len(lines) > 4:
+                header_row_index = 4  # Default to row 5
+                print(f"Header row not detected, falling back to default row 5 (index 4)")
+            elif len(lines) > 3:
+                header_row_index = 3  # Fallback to row 4
+                print(f"Header row not detected, falling back to shorter default row 4 (index 3)")
+            else:
+                header_row_index = 0
+                print(f"Header row not detected, using first row as header")
+        
+        # Split into metadata, header, and data based on detected header
+        metadata_lines = lines[:header_row_index]
+        header_line = lines[header_row_index] if header_row_index < len(lines) else ""
+        data_lines = lines[(header_row_index+1):] if header_row_index+1 < len(lines) else []
+        
+        print(f"File structure: {len(metadata_lines)} metadata lines, 1 header line, {len(data_lines)} data lines")
         
         # Setup CSV writer for output
         output = io.StringIO()
         writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
         
-        # Process metadata lines (first 4 lines) - write as single-column rows
+        # Process metadata lines - write as single-column rows
         for line in metadata_lines:
             writer.writerow([line])
             print(f"Preserved metadata line: {line[:50]}..." if len(line) > 50 else line)
@@ -380,21 +412,23 @@ def normalize_csv(csv_content):
                 if len(fields) < max_columns:
                     # Pad with empty fields if needed
                     fields.extend([''] * (max_columns - len(fields)))
-                    print(f"Padded row {i+6} from {len(fields)} to {max_columns} fields")
+                    if i < 10 or i % 100 == 0:  # Limit logging
+                        print(f"Padded row {i+header_row_index+2} from {len(fields)} to {max_columns} fields")
                 elif len(fields) > max_columns:
                     # Truncate if there are too many fields
                     fields = fields[:max_columns]
-                    print(f"Truncated row {i+6} from {len(fields)} to {max_columns} fields")
+                    if i < 10 or i % 100 == 0:  # Limit logging
+                        print(f"Truncated row {i+header_row_index+2} from {len(fields)} to {max_columns} fields")
                 
                 # Write the normalized row
                 writer.writerow(fields)
                 successful_rows += 1
                 
                 if i < 3:  # Print sample of first few rows
-                    print(f"Sample row {i+6}: Fields={len(fields)}, First few: {str(fields[:3])}")
+                    print(f"Sample row {i+header_row_index+2}: Fields={len(fields)}, First few: {str(fields[:3])}")
                     
             except Exception as e:
-                print(f"Error processing row {i+6}: {str(e)}")
+                print(f"Error processing row {i+header_row_index+2}: {str(e)}")
                 # For problematic rows, write as a single field
                 writer.writerow([line])
                 problem_rows += 1
@@ -452,31 +486,42 @@ def stream_analysis(
         clean_csv.write(csv_content)
         clean_csv.seek(0)  # Reset pointer to beginning of file
         
-        # First read without headers to examine the file structure
-        print("Examining file structure...")
+        # First, try to detect the header row location
+        header_row = None
+        print("Attempting to detect header row location...")
+        
         try:
+            # Read the first 10 rows to look for the header
             preview_data = pd.read_csv(
                 clean_csv, 
                 dtype=str, 
                 header=None,
-                nrows=10,  # Just read the first 10 rows to examine structure
+                nrows=10,  # Read more rows to find header
                 encoding='utf-8'
             )
             
-            print(f"Preview data shape: {preview_data.shape}")
+            # Look for a row with "Company Name" and "Informal Name"
+            for i in range(min(10, len(preview_data))):
+                row = preview_data.iloc[i]
+                if len(row) >= 2:
+                    if "Company Name" in str(row[0]) and "Informal Name" in str(row[1]):
+                        header_row = i
+                        print(f"Header row detected at row {i+1}")
+                        break
             
-            # Print the first few rows to help diagnose
-            for i in range(min(7, len(preview_data))):
-                print(f"Row {i}: First few values: {[str(x)[:20] + '...' if len(str(x)) > 20 else str(x) for x in preview_data.iloc[i][:5]]}")
+            # If header not found, default to row 5 (index 4)
+            if header_row is None:
+                header_row = 4
+                print("Header row not detected, using default row 5 (index 4)")
             
-            # Now read the file again, skipping the first 4 rows to get to the header
+            # Read the file again, skipping rows up to the header
             clean_csv.seek(0)
-            print("Reading CSV with skiprows=4 to get to header row...")
+            print(f"Reading CSV with skiprows={header_row}...")
             
             all_data = pd.read_csv(
                 clean_csv, 
                 dtype=str, 
-                skiprows=4,  # Skip first 4 rows to get to header
+                skiprows=header_row,  # Skip rows based on detected header
                 encoding='utf-8'
             )
             
@@ -489,13 +534,15 @@ def stream_analysis(
             # Normalize the CSV to handle delimiter/format issues
             clean_csv = normalize_csv(csv_content)
             
-            # Try parsing again with the normalized content
-            print("Reading normalized CSV with skiprows=4...")
+            # Try parsing again with the normalized content - header detection is handled in normalize_csv
+            print("Reading normalized CSV...")
             
+            # For normalized content, we need to skip first few lines which are metadata
+            # The normalize_csv function preserves the original structure
             all_data = pd.read_csv(
                 clean_csv, 
                 dtype=str, 
-                skiprows=4,  # Skip first 4 rows to get to header
+                header=0,  # The normalized file has header as the first row
                 encoding='utf-8'
             )
             

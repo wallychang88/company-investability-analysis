@@ -5,7 +5,7 @@ from __future__ import annotations
 import json, os, time
 from typing import Dict, Generator, List
 from io import BytesIO
-
+import csv
 import pandas as pd
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
@@ -289,17 +289,15 @@ def score_batch(
 def normalize_csv(csv_content):
     """
     Normalize CSV content to ensure consistent delimiting.
-    Detects header row by looking for "Company Name" and uses the best delimiter.
+    Handles SourceScrub CSV files with flexible header detection.
     
     Args:
         csv_content: The raw CSV content as bytes
         
     Returns:
-        BytesIO: A buffer containing the normalized CSV content
+        BytesIO: A buffer containing the normalized CSV content,
+        int: The index of the header row in the normalized file (usually 4)
     """
-    import io
-    import csv
-    from io import BytesIO
     
     print("Starting CSV normalization process...")
     
@@ -315,29 +313,37 @@ def normalize_csv(csv_content):
         
         # Split the content into lines
         lines = text_content.splitlines()
-        print(f"File has {len(lines)} lines total.")
         
-        # Detect header row by looking for "Company Name"
+        # First check if we can find "Company Name" in any of the first 10 rows
         header_row_index = -1
-        for i, line in enumerate(lines[:min(10, len(lines))]):
-            if "Company Name" in line:
+        for i in range(min(10, len(lines))):
+            if "Company Name" in lines[i]:
                 header_row_index = i
                 print(f"Header row detected at line {i+1}")
                 break
         
-        # If not found, use default (row 5)
+        # If not found, use default (SourceScrub typically has 4 metadata rows)
         if header_row_index < 0:
-            if len(lines) > 4:
-                header_row_index = 4  # Default to row 5
-                print("Header not detected, using default row 5")
-            else:
-                header_row_index = 0
-                print("Header not detected and file too short, using row 1")
+            header_row_index = 4  # Default to row 5 (index 4)
+            print("Header not detected, using default row 5")
         
-        # Get the header line
-        header_line = lines[header_row_index]
+        # Split into metadata, header, and data
+        metadata_lines = lines[:header_row_index]
+        header_line = lines[header_row_index] if header_row_index < len(lines) else ""
+        data_lines = lines[header_row_index+1:] if header_row_index+1 < len(lines) else []
         
-        # Determine the best delimiter for the header like in the original solution
+        print(f"File has {len(lines)} lines total.")
+        print(f"Using {len(metadata_lines)} metadata lines, 1 header line, and {len(data_lines)} data lines.")
+        
+        # Setup CSV writer for output
+        output = io.StringIO()
+        writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+        
+        # Process metadata lines - write as single-column rows
+        for line in metadata_lines:
+            writer.writerow([line])
+        
+        # Determine the best delimiter for the header
         delimiters = [',', '\t', ';', '|']
         best_delimiter = ','  # Default
         max_columns = 0
@@ -358,32 +364,24 @@ def normalize_csv(csv_content):
         
         print(f"Selected delimiter '{best_delimiter}' with {max_columns} columns")
         
-        # Setup CSV writer for output
-        output = io.StringIO()
-        writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
-        
-        # Write metadata lines as single-column rows
-        for i in range(header_row_index):
-            writer.writerow([lines[i]])
-            
         # Write the header with properly separated fields
         writer.writerow(header_fields)
         print(f"Processed header with {len(header_fields)} fields")
         
         # Process the data rows with the same delimiter
-        for i, line in enumerate(lines[header_row_index+1:]):
+        for i, line in enumerate(data_lines):
             try:
                 # Create a CSV reader with the best delimiter
                 row_reader = csv.reader([line], delimiter=best_delimiter)
                 fields = list(next(row_reader))
                 
                 # Ensure each row has the right number of fields
-                if len(fields) < len(header_fields):
+                if len(fields) < max_columns:
                     # Pad with empty fields if needed
-                    fields.extend([''] * (len(header_fields) - len(fields)))
-                elif len(fields) > len(header_fields):
+                    fields.extend([''] * (max_columns - len(fields)))
+                elif len(fields) > max_columns:
                     # Truncate if there are too many fields
-                    fields = fields[:len(header_fields)]
+                    fields = fields[:max_columns]
                 
                 # Write the normalized row
                 writer.writerow(fields)
@@ -400,14 +398,14 @@ def normalize_csv(csv_content):
         normalized_buffer.seek(0)
         
         print("CSV normalization completed successfully")
-        return normalized_buffer
+        return normalized_buffer, len(metadata_lines)
         
     except Exception as e:
         print(f"Error during CSV normalization: {type(e).__name__}: {str(e)}")
         # Return the original content
         original_buffer = BytesIO(csv_content)
         original_buffer.seek(0)
-        return original_buffer
+        return original_buffer, 4  # Default to assuming 4 metadata rows
 
 def stream_analysis(
     csv_stream, column_map: Dict[str, str], criteria: str
@@ -475,14 +473,16 @@ def stream_analysis(
             print(f"Error during initial CSV parsing: {type(e).__name__}: {str(e)}")
             print("Applying normalization to handle the CSV format...")
             
-            # Use the normalize_csv function that implements the successful approach
-            normalized_csv = normalize_csv(csv_content)
+            clean_csv, header_rows = normalize_csv(csv_content)
             
-            # Try parsing the normalized CSV
+            # Try parsing again with the normalized content
+            print(f"Reading normalized CSV with skiprows={header_rows}...")
+            
             all_data = pd.read_csv(
-                normalized_csv, 
+                clean_csv, 
                 dtype=str, 
-                header=0,  # Header is the first row in normalized CSV
+                skiprows=header_rows,  # Use the detected header rows count
+                header=0,  # First row after skipping is the header
                 encoding='utf-8'
             )
             

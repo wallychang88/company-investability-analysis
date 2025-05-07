@@ -632,9 +632,12 @@ const TopTable = () => {
     return results
       .slice()
       .sort((a, b) => b.investability_score - a.investability_score)
-      .map(result => {
+      .map((result, index) => {
         // Get the company name from the result
-        const companyName = result.company_name;
+        let companyName = result.company_name;
+        
+        // Check if company name is blank/empty (marked as "COMPANY NAME BLANK" by the backend)
+        const isNameBlank = !companyName || companyName.trim() === '' || companyName === "COMPANY NAME BLANK";
         
         // Find the original company data using multiple matching strategies
         let originalData = null;
@@ -697,8 +700,13 @@ const TopTable = () => {
           ? originalData[columnMap.employee_count]
           : 'N/A';
         
+        // For blank company names, use "NAME FIELD BLANK (Row #)" format
+        const displayName = isNameBlank 
+          ? `NAME FIELD BLANK (Row ${index + 1})` 
+          : companyName;
+        
         return {
-          name: companyName,
+          name: displayName,
           foundingYear,
           employeeCount,
           website: formattedUrl,
@@ -746,12 +754,13 @@ const TopTable = () => {
                       ) : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-center whitespace-nowrap text-gray-700 font-bold">
-                      <span className={`inline-block px-3 py-1 rounded-full ${
+          <span className={`inline-block px-3 py-1 rounded-full ${
                         company.score >= 7 ? "bg-green-100 text-green-800" : 
                         company.score >= 4 ? "bg-yellow-100 text-yellow-800" : 
+                        company.score === -1 ? "bg-gray-100 text-gray-800" :
                         "bg-red-100 text-red-800"
                       }`}>
-                        {company.score}
+                        {company.score === -1 ? "-1" : company.score}
                       </span>
                     </td>
                   </tr>

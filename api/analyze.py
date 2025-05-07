@@ -533,7 +533,7 @@ def stream_analysis(
             print(f"Resuming from row {resume_from}")
         
         # Use smaller chunks - this is key for staying within time limits
-        chunk_size = 50  # Smaller value than original 1000
+        chunk_size = 2  # Smaller value than original 1000
         
         # Send an initial progress update to client
         initial_payload = {

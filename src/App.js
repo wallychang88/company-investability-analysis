@@ -78,20 +78,50 @@ export default function VCAnalysisTool() {
     header: false,
     skipEmptyLines: false,
     complete: ({ data }) => {
-      // Check if there's enough rows for the header
-      if (data.length <= HEADER_ROW_INDEX) {
-        setLastError(`File needs at least ${HEADER_ROW_INDEX + 1} rows`);
-        return;
+      // Detect the header row by looking for "Company Name" and "Informal Name"
+      let headerRowIndex = -1;
+      
+      for (let i = 0; i < Math.min(10, data.length); i++) {
+        const row = data[i];
+        if (Array.isArray(row) && row.length >= 2) {
+          // Check if first column contains "Company Name" and second contains "Informal Name"
+          if (
+            row[0] && row[0].toString().includes("Company Name") && 
+            row[1] && row[1].toString().includes("Informal Name")
+          ) {
+            headerRowIndex = i;
+            console.log(`Header row detected at line ${i+1}`);
+            break;
+          }
+        }
       }
       
-      const hdr = data[HEADER_ROW_INDEX];
+      // If header row not found, fallback to default (row 5 or row 4)
+      if (headerRowIndex < 0) {
+        if (data.length > 4) {
+          headerRowIndex = 4;  // Row 5 (index 4)
+          console.log("Header row not detected, using default row 5");
+        } else if (data.length > 3) {
+          headerRowIndex = 3;  // Row 4 (index 3)
+          console.log("Header row not detected, using shorter default row 4");
+        } else if (data.length > 0) {
+          headerRowIndex = 0;
+          console.log("Header row not detected, using first row");
+        } else {
+          setLastError("File appears to be empty");
+          return;
+        }
+      }
+      
+      const hdr = data[headerRowIndex];
       if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
         setLastError("Could not detect headers in file");
         return;
       }
       
+      // Process data rows after the header
       const rows = data
-        .slice(HEADER_ROW_INDEX + 1)
+        .slice(headerRowIndex + 1)
         .map((row) => {
           const o = {};
           hdr.forEach((h, idx) => {

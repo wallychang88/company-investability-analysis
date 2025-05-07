@@ -32,7 +32,6 @@ export default function VCAnalysisTool() {
   const [parsedData, setParsedData] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [columnMap, setColumnMap] = useState({});
-  const [delimiterType, setDelimiterType] = useState("auto");
   const [investCriteria, setInvestCriteria] = useState(
   `We invest in: 
   • Enterprise SaaS, software enabled services and managed service/BPO companies
@@ -69,181 +68,72 @@ export default function VCAnalysisTool() {
   }, [investCriteria]);
 
   /* ─────────── File Upload & Parse ─────────── */
-
-const handleFileUpload = (e) => {
+  const handleFileUpload = (e) => {
   const f = e.target.files[0];
   if (!f) return;
   setFile(f);
-  setLastError(null);
-  
-  // Read file as text first to handle BOM properly
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    let fileContent = event.target.result;
-    
-    // Remove BOM if present
-    if (fileContent.charCodeAt(0) === 0xFEFF) {
-      fileContent = fileContent.substring(1);
-      console.log("Removed BOM from file");
-    }
-    
-    // Determine delimiter configuration
-    const delimiter = delimiterType === "auto" ? "" : 
-                    delimiterType === "comma" ? "," : 
-                    delimiterType === "tab" ? "\t" : 
-                    delimiterType === "pipe" ? "|" : "";
-    
-    console.log(`Using delimiter: ${delimiter || 'auto-detect'}`);
-    
-    // First pass - look specifically for header row with "Company Name", "Informal Name"
-    let headerRowIndex = null;
-    
-    Papa.parse(fileContent, {
-      delimiter: delimiter,
-      header: false,
-      skipEmptyLines: true,
-      preview: 20, // Look at first 20 rows to find header
-      step: function(results, parser) {
-        const row = results.data;
-        
-        // Check if the row starts with "Company Name" followed by "Informal Name"
-        if (row.length >= 2 && 
-            typeof row[0] === 'string' && 
-            typeof row[1] === 'string' && 
-            row[0].trim().toLowerCase() === "company name" && 
-            row[1].trim().toLowerCase() === "informal name") {
-          
-          headerRowIndex = results.meta.cursor;
-          console.log(`Header row found at index ${headerRowIndex}`);
-          parser.abort(); // Stop parsing once we find the header
-        }
-      },
-      complete: function() {
-        if (headerRowIndex === null) {
-          console.log("No header row with 'Company Name' and 'Informal Name' found in the first 20 rows");
-          setLastError("Could not find the header row with 'Company Name' and 'Informal Name' columns");
-          return;
-        }
-        
-        // Second pass - parse with the identified header row
-        console.log(`Using header row at index ${headerRowIndex}`);
-        
-        Papa.parse(fileContent, {
-          delimiter: delimiter,
-          header: false,
-          skipEmptyLines: true,
-          transformHeader: h => h ? h.trim() : h, // Trim header whitespace
-          complete: ({ data, errors, meta }) => {
-            // Log parsing details for debugging
-            console.log(`Parse data rows: ${data.length}`);
-            console.log(`Parse errors: ${errors.length > 0 ? errors.map(e => e.message).join("; ") : "None"}`);
-            console.log(`Delimiter detected: ${meta.delimiter}`);
-            
-            // Check if there were any parsing errors
-            if (errors.length > 0) {
-              setLastError(`CSV parsing errors: ${errors.map(e => e.message).join("; ")}`);
-              return;
-            }
-            
-            // Validate the header row
-            const hdr = data[headerRowIndex];
-            if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
-              setLastError("Could not validate headers in file");
-              return;
-            }
-            
-            // Log header row for debugging
-            console.log("Header row found:", hdr);
-            console.log(`Header length: ${hdr.length}`);
-            
-            // Process data rows
-            const rows = data
-              .slice(headerRowIndex + 1)
-              .map((row) => {
-                // Skip rows with no data
-                if (!row || row.length === 0) {
-                  return null;
-                }
-                
-                // For rows with fewer columns than headers, pad with empty strings
-                const paddedRow = [...row];
-                while (paddedRow.length < hdr.length) {
-                  paddedRow.push("");
-                }
-                
-                const o = {};
-                hdr.forEach((h, idx) => {
-                  // Only add properties for headers that exist
-                  if (h && h.trim()) {
-                    o[h.trim()] = paddedRow[idx] || "";
-                  }
-                });
-                
-                // Only keep rows that have some data
-                if (Object.keys(o).length === 0) {
-                  return null;
-                }
-                
-                return o;
-              })
-              .filter(Boolean); // Remove null entries
-            
-            if (rows.length === 0) {
-              setLastError("No valid data rows found after processing");
-              return;
-            }
-            
-            setParsedData(rows);
-            const cleanHeaders = hdr.filter(Boolean).map((h) => h?.trim() || "");
-            setHeaders(cleanHeaders);
 
-            // Auto‑map columns (case‑insensitive match)
-            const lower = cleanHeaders.map((h) => h.toLowerCase());
-            const find = (needle) => {
-              const idx = lower.indexOf(needle.toLowerCase());
-              return idx !== -1 ? cleanHeaders[idx] : "";
-            };
-            
-            // Map columns with direct matches for the known structure
-            setColumnMap({
-              company_name: find("company name"),
-              employee_count: find("employee count") || find("employees") || find("employee"),
-              description: find("description") || find("company description"),
-              industries: find("industries") || find("industry"),
-              specialties: find("specialties") || find("specialty"),
-              products_services: find("products and services") || find("products & services") || find("products"),
-              end_markets: find("end markets") || find("markets"),
-              country: find("country") || find("location") || find("hq country"),
-              ownership: find("ownership") || find("company type") || find("company status"),
-              total_raised: find("total raised") || find("total funding") || find("funding"),
-              latest_raised: find("latest raised") || find("latest round") || find("last fundraise"),
-              date_of_most_recent_investment: find("date of most recent investment") || find("last investment date") || find("most recent funding date"),
-              field_1: "",
-              field_2: "",
-              field_3: ""
-            });
-            
-            setLastError(null);
-          },
-          error: (err) => {
-            console.error("CSV parse error:", err);
-            setLastError(`CSV parse error: ${err.message}`);
-          },
-        });
-      },
-      error: (err) => {
-        console.error("CSV scan error:", err);
-        setLastError(`CSV parse error: ${err.message}`);
-      },
-    });
-  };
-  
-  reader.onerror = () => {
-    setLastError("Error reading file");
-  };
-  
-  reader.readAsText(f);
+  Papa.parse(f, {
+    delimiter: "", // auto‑detect (csv / tsv / pipe)
+    header: false,
+    skipEmptyLines: false,
+    complete: ({ data }) => {
+      // Check if there's enough rows for the header
+      if (data.length <= HEADER_ROW_INDEX) {
+        setLastError(`File needs at least ${HEADER_ROW_INDEX + 1} rows`);
+        return;
+      }
+      
+      const hdr = data[HEADER_ROW_INDEX];
+      if (!hdr || !Array.isArray(hdr) || hdr.filter(Boolean).length === 0) {
+        setLastError("Could not detect headers in file");
+        return;
+      }
+      
+      const rows = data
+        .slice(HEADER_ROW_INDEX + 1)
+        .map((row) => {
+          const o = {};
+          hdr.forEach((h, idx) => {
+            if (h) o[h.trim()] = row[idx];
+          });
+          return o;
+        })
+        .filter((o) => Object.keys(o).length > 0);
+
+      setParsedData(rows);
+      const cleanHeaders = hdr.filter(Boolean).map((h) => h.trim());
+      setHeaders(cleanHeaders);
+
+      // Auto‑map columns (case‑insensitive match)
+      const lower = cleanHeaders.map((h) => h.toLowerCase());
+      const find = (needle) => {
+        const idx = lower.indexOf(needle.toLowerCase());
+        return idx !== -1 ? cleanHeaders[idx] : "";
+      };
+      setColumnMap({
+        employee_count: find("employee count") || find("employees"),
+        description: find("description") || find("company description"),
+        industries: find("industries") || find("industry"),
+        specialties: find("specialties") || find("specialty"),
+        products_services: find("products and services") || find("products & services") || find("products"),
+        end_markets: find("end markets") || find("markets"),
+        country: find("country") || find("location") || find("hq country"),
+        ownership: find("ownership") || find("company type") || find("company status"),
+        total_raised: find("total raised") || find("total funding") || find("funding"),
+        latest_raised: find("latest raised") || find("latest round") || find("last fundraise"),
+        date_of_most_recent_investment: find("date of most recent investment") || find("last investment date") || find("most recent funding date"),
+        field_1: "",
+        field_2: "",
+        field_3: ""
+      });
+      
+      setLastError(null);
+    },
+    error: (err) => setLastError(`CSV parse error: ${err.message}`),
+  });
 };
+
   /* ─────────── Column mapping helpers ─────────── */
   const updateMapping = (field, value) =>
     setColumnMap((cm) => ({ ...cm, [field]: value }));
@@ -801,63 +691,17 @@ const TopTable = () => {
         )}
 
         {/* 1. Upload */}
-<section className="p-6 mb-6 border border-blue-100 rounded-lg bg-blue-50 space-y-4">
-  <h2 className="text-xl font-semibold text-blue-800 flex items-center">Upload CSV / TSV File</h2>
-  <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-200 rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition text-center">
-    <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={handleFileUpload} className="hidden" />
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-    </svg>
-    <span className="mt-2 text-base text-gray-600">{file ? file.name : "Click to select a file or drop it here"}</span>
-    <span className="text-xs text-gray-500 mt-1">CSV/TSV format with company data</span>
-  </label>
-  
-  {/* Add delimiter selector component here */}
-  <div className="mb-4">
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      CSV Delimiter
-      <span className="text-blue-600 ml-1">(Select if auto-detection fails)</span>
-    </label>
-    <div className="flex space-x-4">
-      <label className="inline-flex items-center">
-        <input
-          type="radio"
-          checked={delimiterType === "auto"}
-          onChange={() => setDelimiterType("auto")}
-          className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-        />
-        <span className="ml-2 text-sm text-gray-700">Auto-detect</span>
-      </label>
-      <label className="inline-flex items-center">
-        <input
-          type="radio"
-          checked={delimiterType === "comma"}
-          onChange={() => setDelimiterType("comma")}
-          className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-        />
-        <span className="ml-2 text-sm text-gray-700">Comma (,)</span>
-      </label>
-      <label className="inline-flex items-center">
-        <input
-          type="radio"
-          checked={delimiterType === "tab"}
-          onChange={() => setDelimiterType("tab")}
-          className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-        />
-        <span className="ml-2 text-sm text-gray-700">Tab</span>
-      </label>
-      <label className="inline-flex items-center">
-        <input
-          type="radio"
-          checked={delimiterType === "pipe"}
-          onChange={() => setDelimiterType("pipe")}
-          className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-        />
-        <span className="ml-2 text-sm text-gray-700">Pipe (|)</span>
-      </label>
-    </div>
-  </div>
-</section>
+        <section className="p-6 mb-6 border border-blue-100 rounded-lg bg-blue-50 space-y-4">
+          <h2 className="text-xl font-semibold text-blue-800 flex items-center">Upload CSV / TSV File</h2>
+          <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-200 rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition text-center">
+            <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={handleFileUpload} className="hidden" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <span className="mt-2 text-base text-gray-600">{file ? file.name : "Click to select a file or drop it here"}</span>
+            <span className="text-xs text-gray-500 mt-1">CSV/TSV format with company data</span>
+          </label>
+        </section>
 
         {/* 2. Preview */}
         {parsedData.length > 0 && (

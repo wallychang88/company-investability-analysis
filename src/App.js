@@ -632,29 +632,15 @@ const TopTable = () => {
         // Get the company name from the result
         const companyName = result.company_name;
         
-        // Check if this is a placeholder name
-        const isPlaceholder = companyName.includes("NAME FIELD BLANK");
-        
-        // If it's a placeholder, don't try to match with original data
-        if (isPlaceholder) {
-          return {
-            name: companyName,
-            foundingYear: 'N/A',
-            employeeCount: 'N/A',
-            website: '',
-            score: result.investability_score
-          };
-        }
-        
-        // For regular names, find the original company data
+        // Find the original company data using multiple matching strategies
         let originalData = null;
         
-        // Try exact match on company_name field
+        // First try exact match on company_name field
         if (columnMap.company_name) {
           originalData = parsedData.find(row => row[columnMap.company_name] === companyName);
         }
         
-        // If still no match, try case-insensitive match on company_name
+        // If no match, try case-insensitive match on company_name field
         if (!originalData && columnMap.company_name) {
           originalData = parsedData.find(row => {
             const name = row[columnMap.company_name];
@@ -692,8 +678,13 @@ const TopTable = () => {
           ? originalData[columnMap.employee_count]
           : 'N/A';
         
+        // Determine display name - use placeholder for empty names
+        const displayName = (!companyName || companyName.trim() === '') ? 
+          "NAME FIELD BLANK" : companyName;
+        
         return {
-          name: companyName,
+          name: displayName,
+          rawName: companyName, // Keep original for matching
           foundingYear,
           employeeCount,
           website: formattedUrl,
@@ -726,8 +717,8 @@ const TopTable = () => {
                 topCompanies.map((company, idx) => (
                   <tr key={idx} className={idx % 2 ? "bg-gray-50" : ""}>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">
-                      {company.name.includes("NAME FIELD BLANK") ? (
-                        <span className="text-amber-600 italic">{company.name}</span>
+                      {company.name === "NAME FIELD BLANK" ? (
+                        <span className="text-amber-600 italic">NAME FIELD BLANK</span>
                       ) : (
                         company.name
                       )}

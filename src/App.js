@@ -38,9 +38,7 @@ export default function VCAnalysisTool() {
   • Have between 80 and 300 employees
   • Are based in the US, UK, Canada, or Israel
   • Have raised in total less than $150 million
-  • Ownership is private, venture capital, private equity, or seed
-  • provide a product or service that supports AI/HPC infrastructure and/or is an enabler of AI/HPC environment buildout
-  • have a clear, defensible moat (e.g., proprietary data or network effects)`
+  • Ownership is private, venture capital, private equity, or seed`
   );
   const [criteriaWeights, setCriteriaWeights] = useState([]); // [{id,label,weight}]
   const [isProcessing, setIsProcessing] = useState(false);

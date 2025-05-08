@@ -33,8 +33,8 @@ export default function VCAnalysisTool() {
   const [headers, setHeaders] = useState([]);
   const [columnMap, setColumnMap] = useState({});
   const [investCriteria, setInvestCriteria] = useState(
-  `We invest in: 
-  • Enterprise B2B SaaS and software-enabled service companies...`
+  `Additional emphasis for scoring: 
+  • `
   );
   const [criteriaWeights, setCriteriaWeights] = useState([]); // [{id,label,weight}]
   const abortRef = useRef(null);
@@ -1085,7 +1085,7 @@ return (
         {/* 4. Criteria & weights */}
         <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-6">
           <h2 className="text-xl font-semibold text-navy-800">Define Investing Criteria (editable, pre-filled with some typical criteria)</h2>
-          <p className="text-xs italic text-gray-600 mt-1">Don't worry about typing in Carrick criteria, this is already built into the model on the backend (if analysis run without criteria, a default Carrick market map scoring will be automatically implemented). Input other filtering criteria as necessary for your search, e.g., "place specific focus on governance, risk and compliance companies".</p>
+          <p className="text-xs italic text-gray-600 mt-1">The Carrick investment criteria are already built into the model. Use this field to add specific additional criteria that should receive extra emphasis in scoring (e.g., "specifically seeking governance, risk, and compliance companies" or "place extra emphasis on companies with AI/ML capabilities"). If left empty, the default Carrick market map scoring will be automatically applied.</p>
           <textarea
             value={investCriteria}
             onChange={(e) => setInvestCriteria(e.target.value)}

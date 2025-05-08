@@ -131,8 +131,8 @@ def build_system_prompt(criteria: str) -> str:
     
     # Criteria handling instruction
     criteria_instruction = """
-    ADDITIONAL SCORING EMPHASIS!!:
-    The following criteria should be considered as specialized focus areas that modify the overall scoring approach. DO NOT boost scores for companies that match these criteria. Instead, REDUCE scores (by 1-2 points) for companies that DO NOT match these criteria, while keeping scores unchanged for companies that DO match these criteria. This maintains appropriate scores for companies matching our current interests while downgrading those that don't align with our specialized focus areas. These criteria are NOT replacements for the core investment criteria but represent specific areas of current interest:    
+    IMPORTANT ADDITIONAL SCORING EMPHASIS!!:
+    The following criteria should be considered as specialized focus areas that modify the overall scoring approach. DO NOT boost scores for companies that match these criteria. Instead, REDUCE scores (by 1-3 points) for companies that DO NOT match these criteria, while keeping scores unchanged for companies that DO match these criteria. This maintains appropriate scores for companies matching our current interests while downgrading those that don't align with our specialized focus areas. These criteria are NOT replacements for the core investment criteria but represent specific areas of current interest:    
     """
     
     # If criteria is provided, include it with the instruction, otherwise omit it

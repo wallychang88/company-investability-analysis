@@ -469,8 +469,6 @@ def score_batch(
         return [{"company_name": name, "investability_score": -1} for name in company_names]
     except Exception as e:
         print(f"Error in score_batch: {type(e).__name__}: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
         
         # Return companies with -1 scores instead of fallback scoring
         return [{"company_name": name, "investability_score": -1} for name in company_names]
@@ -766,14 +764,12 @@ def stream_analysis(
                 payload = {
                     "progress": processed,
                     "status": "chunk_error",
-                    "error": f"OpenAI error: {e.__class__.__name__}: {e}",
                 }
             except Exception as e:
                 print(f"Unexpected error in batch processing: {type(e).__name__}: {str(e)}")
                 payload = {
                     "progress": processed,
                     "status": "chunk_error",
-                    "error": f"Error: {type(e).__name__}: {str(e)}",
                 }
 
             processed += num_rows
@@ -791,8 +787,6 @@ def stream_analysis(
         
     except Exception as e:
         print(f"Stream analysis error: {type(e).__name__}: {str(e)}")
-        import traceback
-        traceback.print_exc()
         yield json.dumps({"error": f"Stream error: {str(e)}"}) + "\n"
         
 ###############################################################################
@@ -810,20 +804,6 @@ def analyze_endpoint():
     print(f"API KEY PRESENT: {'Yes' if api_key else 'No'}")
     if not api_key:
         error_msg = "OpenAI API key not set. Please set the OPENAI_API_KEY environment variable."
-        print(f"Error: {error_msg}")
-        return jsonify({"error": error_msg}), 500
-    
-    # Test OpenAI connectivity with the actual model we'll use
-    try:
-        print(f"Testing OpenAI connection with model {MODEL_NAME}...")
-        test_response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": "Say 'Connection established' in 5 words or less."}],
-            max_tokens=10
-        )
-        print(f"OpenAI API test successful! Response: {test_response.choices[0].message.content}")
-    except Exception as e:
-        error_msg = f"OpenAI API test failed: {type(e).__name__}: {str(e)}"
         print(f"Error: {error_msg}")
         return jsonify({"error": error_msg}), 500
     

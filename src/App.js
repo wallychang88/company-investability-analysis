@@ -36,6 +36,7 @@ export default function VCAnalysisTool() {
   `Additional emphasis for scoring: 
   • `
   );
+  const [criteriaWeights, setCriteriaWeights] = useState([]); // [{id,label,weight}]
   const abortRef = useRef(null);
   const progressSectionRef = useRef(null);
   
@@ -55,6 +56,22 @@ export default function VCAnalysisTool() {
     totalRows: 0
   }
 });
+
+  /* ───────── Parse bullet list → criteriaWeights ───────── */
+  useEffect(() => {
+    const bullets = investCriteria
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("•"))
+      .map((l) => l.slice(1).trim());
+
+    setCriteriaWeights((prev) =>
+      bullets.map((txt, i) => {
+        const existing = prev.find((p) => p.label === txt);
+        return existing || { id: `c_${i}`, label: txt, weight: 1.0 };
+      })
+    );
+  }, [investCriteria]);
 
   /* ─────────── File Upload & Parse ─────────── */
 // Update handleFileUpload function to use combined state
@@ -206,6 +223,10 @@ const handleFileUpload = (e) => {
   const updateMapping = (field, value) =>
     setColumnMap((cm) => ({ ...cm, [field]: value }));
 
+  /* ─────────── Criteria weight slider ─────────── */
+  const updateWeight = (id, w) =>
+    setCriteriaWeights((arr) => arr.map((x) => (x.id === id ? { ...x, weight: w } : x)));
+
   /* ─────────── Progress histogram (0‑10) ─────────── */
 const distribution = useMemo(() => {
   const bins = Array(11).fill(0);
@@ -320,7 +341,16 @@ const processData = async (resumeFrom = 0) => {
   if (resumeFrom > 0) {
     fd.append("resumeFrom", resumeFrom.toString());
   }
-  
+    
+  // Add weights if available
+  if (criteriaWeights.length > 0) {
+    fd.append("weights", JSON.stringify(
+      criteriaWeights.reduce((obj, item) => {
+        obj[item.label] = item.weight;
+        return obj;
+      }, {})
+    ));
+  }
 
   try {
     const res = await fetch("/api/analyze", { 
@@ -1102,6 +1132,25 @@ return (
             placeholder="Enter your investment criteria. Press Enter to add a new bullet point."
           />
           <p className="text-xs text-navy-600">Use bullet points (•) to define each criterion.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {criteriaWeights.map((it) => (
+              <div key={it.id} className="bg-gray-50 p-4 rounded-lg shadow-sm">
+                <label className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700 truncate" title={it.label}>{it.label}</span>
+                  <span className="text-sm font-bold text-navy-600">{it.weight.toFixed(1)}×</span>
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value={it.weight}
+                  onChange={(e) => updateWeight(it.id, parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            ))}
+          </div>
         </section>
 
         {/* Analyze */}

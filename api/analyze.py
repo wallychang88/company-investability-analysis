@@ -147,7 +147,7 @@ def build_system_prompt(criteria: str) -> str:
         "Each company MUST have both a company_name and investability_score field.\n\n"
         "VERY IMPORTANT: DO NOT CHANGE THE COMPANY NAMES IN ANY WAY - USE THEM EXACTLY AS PROVIDED. DO NOT EXPAND ABBREIVIATIONS, DO NOT CHANGE CAPITALIZATION, DO NOT CHANGE SPACING OR PUNCTUATION. RETURN THE COMPANY NAMES EXACTLY AS PROVIDED. \n\n"
         "VERY IMPORTANT: Follow the scoring guidelines precisely. Companies with >1000 employees should get scores no higher than 3. Companies with missing critical data should get scores no higher than 4.\n\n"
-        "ANALYSIS DATE CONTEXT: This analysis is being performed on {today_date}. Consider this when evaluating company data, especially for time-sensitive metrics like 'date of most recent investment'.\n\n"
+        "ANALYSIS DATE CONTEXT: When evaluating criteria related to dates or time periods (like 'X months ago' or 'last Y years'), use the provided date calculations ('Days since...' and 'Years since...') to make precise comparisons.\n\n"
         "CARRICK INVESTMENT CONTEXT:\n" + investment_context + "\n\n"
         "EXAMPLE PORTFOLIO COMPANIES AND SCORING RATIONALE:\n" + example_companies + "\n\n"
         + criteria_section
@@ -186,6 +186,52 @@ def score_batch(
                 return col
                 
         return None
+    
+    # Date parsing helper function
+    def attempt_date_parse(date_str):
+        """Try to parse a date string in multiple formats."""
+        import re
+        from datetime import datetime
+        
+        if not date_str or not isinstance(date_str, str):
+            return None
+            
+        # Clean the date string - remove parentheses and extra text
+        clean_date = re.sub(r'\([^)]*\)', '', date_str).strip()
+        
+        # List of common date formats
+        formats = [
+            "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y", "%B %d, %Y", "%b %d, %Y",
+            "%m/%d/%y", "%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d"
+        ]
+        
+        # Try each format
+        for fmt in formats:
+            try:
+                return datetime.strptime(clean_date, fmt)
+            except ValueError:
+                continue
+        
+        # Handle "Month Year" format
+        if re.match(r'[A-Za-z]+ \d{4}', clean_date):
+            try:
+                return datetime.strptime(clean_date, "%B %Y")
+            except ValueError:
+                try:
+                    return datetime.strptime(clean_date, "%b %Y")
+                except ValueError:
+                    pass
+        
+        # Handle year-only format
+        if re.match(r'^\d{4}$', clean_date):
+            return datetime(int(clean_date), 1, 1)
+        
+        return None
+    
+    # Get current date for calculations
+    from datetime import datetime
+    current_date = datetime.now()
+    current_date_str = current_date.strftime("%B %d, %Y")
     
     # Print column mapping with improved matching
     print("Improved column mapping:")
@@ -242,7 +288,50 @@ def score_batch(
         latest_raised_col = column_map.get('latest_raised', '')
         recent_investment_col = column_map.get('date_of_most_recent_investment', '')
         
-        # Safe data access with existence check for each column
+        # Enhanced date processing for investment date
+        if recent_investment_col and recent_investment_col in row and row[recent_investment_col]:
+            date_str = row[recent_investment_col]
+            
+            # Add the original date string
+            company_data.append(f"Date of Most Recent Investment: {date_str}")
+            
+            # Try to parse the date
+            parsed_date = attempt_date_parse(date_str)
+            if parsed_date:
+                # Calculate time metrics
+                days_since = (current_date - parsed_date).days
+                years_since = days_since / 365.0
+                months_since = days_since / 30.0
+                
+                # Add processed date information
+                company_data.append(f"Today's Date: {current_date_str}")
+                company_data.append(f"Days Since Last Investment: {days_since}")
+                company_data.append(f"Months Since Last Investment: {months_since:.1f}")
+                company_data.append(f"Years Since Last Investment: {years_since:.2f}")
+        
+        # Enhanced date processing for latest raised field if different from recent investment
+        if latest_raised_col and latest_raised_col in row and row[latest_raised_col]:
+            # Skip if it's the same column as recent_investment_col
+            if latest_raised_col != recent_investment_col:
+                date_str = row[latest_raised_col]
+                
+                # Add the original date string
+                company_data.append(f"Latest Raised: {date_str}")
+                
+                # Try to parse the date
+                parsed_date = attempt_date_parse(date_str)
+                if parsed_date:
+                    # Calculate time metrics
+                    days_since = (current_date - parsed_date).days
+                    years_since = days_since / 365.0
+                    months_since = days_since / 30.0
+                    
+                    # Add processed date information
+                    company_data.append(f"Days Since Latest Raised: {days_since}")
+                    company_data.append(f"Months Since Latest Raised: {months_since:.1f}")
+                    company_data.append(f"Years Since Latest Raised: {years_since:.2f}")
+        
+        # Safe data access with existence check for each column (for non-date fields)
         fields = {
             "Employee Count": row[emp_col] if emp_col in row else '',
             "Description": description,
@@ -253,14 +342,14 @@ def score_batch(
             "Country": row[country_col] if country_col in row else '',
             "Ownership": row[ownership_col] if ownership_col in row else '',
             "Total Raised": row[total_raised_col] if total_raised_col in row else '',
-            "Latest Raised": row[latest_raised_col] if latest_raised_col in row else '',
-            "Date of Most Recent Investment": row[recent_investment_col] if recent_investment_col in row else ''
         }
         
-        # Add each field if it has content
+        # Add each non-date field if it has content and wasn't already added
         for label, value in fields.items():
-            if value and value.strip():
-                company_data.append(f"{label}: {value}")
+            # Skip Date of Most Recent Investment and Latest Raised as they're handled separately
+            if label not in ["Date of Most Recent Investment", "Latest Raised"]:
+                if value and value.strip():
+                    company_data.append(f"{label}: {value}")
         
         # Add optional fields if they're mapped and have content
         field_1_col = column_map.get("field_1", "")
@@ -296,9 +385,10 @@ def score_batch(
     if estimated_tokens > 6000:
         print(f"WARNING: Estimated token count ({estimated_tokens}) is high and may exceed model limits.")
     
-    # Create user message with explicit request for JSON format
+    # Create user message with explicit date context
     user_message = (
         f"Analyze these companies based on our investment criteria. "
+        f"Today's date is {current_date_str}. "
         f"For each company, assign an investability score from 0-10.\n\n"
         f"Return ONLY a JSON object with this structure: {{\"rows\":[{{\"company_name\":\"Name\", \"investability_score\":N}}, ...]}}\n\n"
         f"IMPORTANT: Use the EXACT company names as provided. Do not modify or summarize the company names.\n\n"

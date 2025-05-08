@@ -1002,7 +1002,7 @@ return (
         {/* Header */}
         <header className="bg-white rounded-xl shadow-xl overflow-hidden mb-8">
           <div className="bg-navy-900 px-6 py-8 text-white text-center">
-            <h2 className="text-3xl font-bold">Carrick Investability Analysis Tool</h1>
+            <h2> className="text-3xl font-bold">Carrick Investability Analysis Tool</h2>
             <p className="text-gray-300 mt-2">Analyze companies against your investment criteria. Upload a raw SourceScrub CSV file. <em>Built by Wally</em></p>
           </div>
         </header>

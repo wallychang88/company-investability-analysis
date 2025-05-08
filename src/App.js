@@ -1084,7 +1084,7 @@ return (
 
         {/* 4. Criteria & weights */}
         <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-6">
-          <h2 className="text-xl font-semibold text-navy-800">Define Investing Criteria (editable, pre-filled with some typical criteria)</h2>
+          <h2 className="text-xl font-semibold text-navy-800">Define Additional Investing Criteria</h2>
           <p className="text-xs italic text-gray-600 mt-1">The Carrick investment criteria are already built into the model. Use this field to add specific additional criteria that should receive extra emphasis in scoring (e.g., "specifically seeking governance, risk, and compliance companies" or "place extra emphasis on companies with AI/ML capabilities"). If left empty, the default Carrick market map scoring will be automatically applied.</p>
           <textarea
             value={investCriteria}

@@ -23,7 +23,7 @@ CORS(app, origins=["https://company-investability-score.vercel.app", "http://loc
 # OpenAI client configuration
 ###############################################################################
 
-MODEL_NAME = "gpt-4.1"  
+MODEL_NAME = "gpt-4o-mini"  
 MAX_TOKENS = 1500
 TEMPERATURE = 0.2
 BATCH_SIZE = 2  # rows / OpenAI request

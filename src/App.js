@@ -1128,7 +1128,7 @@ return (
                 }, 0);
               }
             }}
-            rows={10}
+            rows={3}
             className="w-full rounded-md border-gray-300 shadow-sm focus:border-navy-500 focus:ring-navy-200"
             placeholder="Enter your investment criteria. Press Enter to add a new bullet point."
           />

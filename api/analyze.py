@@ -126,6 +126,15 @@ def build_system_prompt(criteria: str) -> str:
     
     """
     
+    # Criteria handling instruction
+    criteria_instruction = """
+    ADDITIONAL SCORING EMPHASIS:
+    The following criteria should be considered as specialized focus areas that receive EXTRA EMPHASIS!! in scoring. Companies matching these additional criteria should receive a scoring boost (1-2 points higher) IF they already meet the basic Carrick investment criteria. These are NOT replacements for the core investment criteria but represent specific areas of current interest:
+    """
+    
+    # If criteria is provided, include it with the instruction, otherwise omit it
+    criteria_section = (criteria_instruction + "\n" + criteria) if criteria.strip() else ""
+    
     return (
         "You are an expert venture analyst. Your task is to evaluate companies based on the investment criteria provided below.\n\n"
         "For each company in the input, you MUST assign an investability score from 0 to 10 (integer only).\n\n"
@@ -137,8 +146,9 @@ def build_system_prompt(criteria: str) -> str:
         "VERY IMPORTANT: Follow the scoring guidelines precisely. Companies with >1000 employees should get scores no higher than 3. Companies with missing critical data should get scores no higher than 4.\n\n"
         "CARRICK INVESTMENT CONTEXT:\n" + investment_context + "\n\n"
         "EXAMPLE PORTFOLIO COMPANIES AND SCORING RATIONALE:\n" + example_companies + "\n\n"
-        "Criteria for evaluation:\n" + criteria
+        + criteria_section
     )
+    
 def truncate_text(text, max_length):
     """Helper function to truncate text to a maximum length."""
     if not text or len(text) <= max_length:

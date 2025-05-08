@@ -1002,9 +1002,8 @@ return (
         {/* Header */}
         <header className="bg-white rounded-xl shadow-xl overflow-hidden mb-8">
           <div className="bg-navy-900 px-6 py-8 text-white text-center">
-            <h1 className="text-3xl font-bold">Carrick Capital</h1>
-            <h2 className="text-2xl font-medium mt-2">Investability Analysis Tool</h2>
-            <p className="text-gray-300 mt-2">Analyze companies against your investment criteria. Upload a raw SourceScrub CSV file.</p>
+            <h2 className="text-3xl font-bold">Carrick Investability Analysis Tool</h1>
+            <p className="text-gray-300 mt-2">Analyze companies against your investment criteria. Upload a raw SourceScrub CSV file. <em>Built by Wally</em></p>
           </div>
         </header>
 
@@ -1085,7 +1084,7 @@ return (
         {/* 4. Criteria & weights */}
         <section className="p-6 mb-6 border border-navy-100 rounded-lg bg-white space-y-6">
           <h2 className="text-xl font-semibold text-navy-800">Define Additional Investing Criteria</h2>
-          <p className="text-xs italic text-gray-600 mt-1">The Carrick investment criteria are already built into the model. Use this field to add specific additional criteria that should receive extra emphasis in scoring (e.g., "specifically seeking governance, risk, and compliance companies" or "place extra emphasis on companies with AI/ML capabilities"). If left empty, the default Carrick market map scoring will be automatically applied.</p>
+          <p className="text-xs italic text-gray-600 mt-1">The Carrick investment criteria are already built into the model (with exception of last raise date filtering criteria). Use this field to add specific additional criteria that should receive extra emphasis in scoring (e.g., "specifically seeking governance, risk, and compliance companies" or "place extra emphasis on companies with AI/ML capabilities"). If left empty, the default Carrick market map scoring will be automatically applied.</p>
           <textarea
             value={investCriteria}
             onChange={(e) => setInvestCriteria(e.target.value)}

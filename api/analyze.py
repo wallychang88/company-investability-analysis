@@ -67,8 +67,7 @@ def build_system_prompt(criteria: str) -> str:
     - Companies with >650 employees should receive scores no higher than 4
     - Companies with >1000 employees should receive scores no higher than 2
     - Companies with >2000 employees should receive a score of 0-1
-    - Companies with missing critical data (e.g., N/A for employee count) should receive scores no higher than 4
-    - Companies with clear mismatches to our investment thesis should receive scores of 0-3
+    - Companies with missing critical data (e.g., N/A for employee count) should receive scores no higher than 4. HOWEVER, if the only missing data is funding-related, this rule DOES NOT apply — funding gaps may be ignored    - Companies with clear mismatches to our investment thesis should receive scores of 0-3
     - Only companies that strongly match our criteria should receive scores of 7-10
     """
     

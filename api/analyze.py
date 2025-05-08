@@ -43,6 +43,10 @@ client = OpenAI(api_key=api_key, timeout=TIMEOUT)
 def build_system_prompt(criteria: str) -> str:
     """Returns the system prompt with user‑supplied criteria embedded and Carrick investment context."""
     
+    # Get today's date in a readable format
+    from datetime import datetime
+    today_date = datetime.now().strftime("%B %d, %Y")
+    
     # Investment context derived from Carrick portfolio analysis
     investment_context = """
     Representative investments in our portfolio typically include:
@@ -67,7 +71,7 @@ def build_system_prompt(criteria: str) -> str:
     - Companies with >650 employees should receive scores no higher than 4
     - Companies with >1000 employees should receive scores no higher than 2
     - Companies with >2000 employees should receive a score of 0-1
-    - Companies with missing critical data (e.g., N/A for employee count) should receive scores no higher than 4. HOWEVER, if the only missing data is funding-related, this rule DOES NOT apply — funding gaps may be ignored    - Companies with clear mismatches to our investment thesis should receive scores of 0-3
+    - Companies with missing employee count data (FTEs) should receive scores no higher than 5
     - Only companies that strongly match our criteria should receive scores of 7-10
     """
     
@@ -135,7 +139,7 @@ def build_system_prompt(criteria: str) -> str:
     criteria_section = (criteria_instruction + "\n" + criteria) if criteria.strip() else ""
     
     return (
-        "You are an expert venture analyst. Your task is to evaluate companies based on the investment criteria provided below.\n\n"
+        f"You are an expert venture analyst. Your task is to evaluate companies based on the investment criteria provided below. Today's date is {today_date}.\n\n"
         "For each company in the input, you MUST assign an investability score from 0 to 10 (integer only).\n\n"
         "Pay special attention to employee count, country, ownership, total raised, latest round, date of most recent investment, and industry fit.\n\n"
         "IMPORTANT: You must return your analysis in VALID JSON format with this exact structure:\n"
@@ -143,6 +147,7 @@ def build_system_prompt(criteria: str) -> str:
         "Each company MUST have both a company_name and investability_score field.\n\n"
         "VERY IMPORTANT: DO NOT CHANGE THE COMPANY NAMES IN ANY WAY - USE THEM EXACTLY AS PROVIDED. DO NOT EXPAND ABBREIVIATIONS, DO NOT CHANGE CAPITALIZATION, DO NOT CHANGE SPACING OR PUNCTUATION. RETURN THE COMPANY NAMES EXACTLY AS PROVIDED. \n\n"
         "VERY IMPORTANT: Follow the scoring guidelines precisely. Companies with >1000 employees should get scores no higher than 3. Companies with missing critical data should get scores no higher than 4.\n\n"
+        "ANALYSIS DATE CONTEXT: This analysis is being performed on {today_date}. Consider this when evaluating company data, especially for time-sensitive metrics like 'date of most recent investment'.\n\n"
         "CARRICK INVESTMENT CONTEXT:\n" + investment_context + "\n\n"
         "EXAMPLE PORTFOLIO COMPANIES AND SCORING RATIONALE:\n" + example_companies + "\n\n"
         + criteria_section

@@ -824,6 +824,15 @@ def analyze_endpoint():
     criteria = request.form.get("criteria", "Return your best estimate.")
     print(f"Investment criteria: {criteria[:100]}...")
     
+    # Get the weights if provided
+    weights_str = request.form.get("weights")
+    if weights_str:
+        try:
+            weights = json.loads(weights_str)
+            print(f"Criteria weights provided: {weights}")
+        except json.JSONDecodeError as e:
+            print(f"Warning: Invalid weights JSON: {str(e)}")
+    
     # Process resume information if provided
     resume_from = int(request.form.get("resumeFrom", "0"))
     if resume_from > 0:

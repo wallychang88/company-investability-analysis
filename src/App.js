@@ -676,7 +676,7 @@ const downloadCSV = () => {
     newRow["Ownership"] = row["Ownership"] || "";
     newRow["Total Raised"] = row["Total Raised"] || "";
     newRow["Latest Raised"] = row["Latest Raised"] || "";
-    newRow["Last Round"] = row["Date of Most Recent Investment"] || "";
+    newRow["Last Round"] = row["Date of Most recent Investment"] || "";
     newRow["Investors"] = row["Investors"] || "";
     newRow["Parent Company"] = row["Parent Company"] || "";
     newRow["Investability Score"] = match ? match.investability_score : "N/A";
@@ -686,7 +686,7 @@ const downloadCSV = () => {
     // Add remaining columns after the primary ones
     const primaryColumns = [
       "Informal Name", "Founding Year", "Country", "Employee Count", "12 Months Growth Rate %",
-      "Ownership", "Total Raised", "Latest Raised", "Date of Most Recent Investment",
+      "Ownership", "Total Raised", "Latest Raised", "Date of Most recent Investment",
       "Investors", "Parent Company", "Website", "Description"
     ];
     
@@ -707,7 +707,7 @@ const downloadCSV = () => {
     "Parent Company", "Investability Score", "Website", "Description",
     ...headers.filter(h => !([
       "Informal Name", "Founding Year", "Country", "Employee Count", "12 Months Growth Rate %",
-      "Ownership", "Total Raised", "Latest Raised", "Date of Most Recent Investment",
+      "Ownership", "Total Raised", "Latest Raised", "Date of Most recent Investment",
       "Investors", "Parent Company", "Website", "Description"
     ].includes(h)))
   ];

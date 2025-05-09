@@ -75,6 +75,7 @@ def build_system_prompt(criteria: str) -> str:
     - Only companies that strongly match our criteria should receive scores of 7-10
     - Companies with >$150M in total funding should receive scores no higher than 7
     - Companies with >$200M in total funding should receive scores no higher than 6
+    - Only companies with Venture Capital, Private, Private Equity, or Seed ownership should score above 1. All others (e.g., Non-Profit, Gov Agency, Edu Institution, Public Sub, Private Sub, Public, Investment Company) must receive scores no higher than 1.
     """
     
     # Example companies from portfolio that represent ideal investments
@@ -148,7 +149,8 @@ def build_system_prompt(criteria: str) -> str:
         '{"rows":[{"company_name":"Company Name 1", "investability_score":8}, {"company_name":"Company Name 2", "investability_score":5}, ...]}\n\n'
         "Each company MUST have both a company_name and investability_score field.\n\n"
         "VERY IMPORTANT: DO NOT CHANGE THE COMPANY NAMES IN ANY WAY - USE THEM EXACTLY AS PROVIDED. DO NOT EXPAND ABBREIVIATIONS, DO NOT CHANGE CAPITALIZATION, DO NOT CHANGE SPACING OR PUNCTUATION. RETURN THE COMPANY NAMES EXACTLY AS PROVIDED. \n\n"
-        "VERY IMPORTANT: Follow the scoring guidelines precisely. Companies with >1000 employees should get scores no higher than 3. Companies with missing critical data should get scores no higher than 4.\n\n"
+        "VERY IMPORTANT: Only companies with Venture Capital, Private, Private Equity, or Seed ownership should score above 1. All others (e.g., Non-Profit, Gov Agency, Edu Institution, Public Sub, Private Sub, Public, Investment Company) must be scored 1 or lower."
+        "VERY IMPORTANT: Follow the scoring guidelines precisely. companies with >650 employees should receive scores no higher than 4 and companies with <70 employees should receive scores no higher than a 6.\n\n"
         "ANALYSIS DATE CONTEXT: When evaluating criteria related to dates or time periods (like 'X months ago' or 'last Y years'), use the provided date calculations ('Days since...' and 'Years since...') to make precise comparisons.\n\n"
         "CARRICK INVESTMENT CONTEXT:\n" + investment_context + "\n\n"
         "EXAMPLE PORTFOLIO COMPANIES AND SCORING RATIONALE:\n" + example_companies + "\n\n"

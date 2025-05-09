@@ -73,6 +73,8 @@ def build_system_prompt(criteria: str) -> str:
     - Companies with >2000 employees should receive a score of 0-1
     - Companies with missing employee count data (FTEs) should receive scores no higher than 5
     - Only companies that strongly match our criteria should receive scores of 7-10
+    - Companies with >$150M in total funding should receive scores no higher than 7
+    - Companies with >$200M in total funding should receive scores no higher than 6
     """
     
     # Example companies from portfolio that represent ideal investments
